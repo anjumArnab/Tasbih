@@ -92,7 +92,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             onPressed: () => _navToDhikrPage(context),
             icon: const Icon(Icons.arrow_forward_ios),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 15),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -113,7 +113,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
               Text(
                 '$_counter',
                 style: TextStyle(
-                  fontSize: screenWidth < 400 ? 64 : 80,
+                  fontSize: 60,
                   fontWeight: FontWeight.w300,
                   color: Colors.black,
                   height: 1,
