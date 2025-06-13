@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/dhikr_tile.dart';
 import '../widgets/animated_circle_button.dart';
 import '../screens/dhikrpage.dart';
 import '../models/dhikr.dart';
@@ -154,80 +155,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         child: Column(
           children: [
             // Dhikr info section (if a dhikr is selected)
-            if (_currentDhikr != null)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _currentDhikr!.dhikr,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Progress',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$_counter / ${_currentDhikr!.times}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 60,
-                          height: 60,
-                          child: CircularProgressIndicator(
-                            value: _counter / _currentDhikr!.times,
-                            strokeWidth: 4,
-                            backgroundColor: Colors.grey[300],
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              _counter >= _currentDhikr!.times
-                                  ? Colors.green
-                                  : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
+            if (_currentDhikr != null) DhikrTile(dhikr: _currentDhikr!),
             // Counter section
             Expanded(
               child: Center(

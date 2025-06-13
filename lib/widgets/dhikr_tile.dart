@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/dhikr.dart';
@@ -28,46 +30,19 @@ class DhikrTile extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: Colors.blue,
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.blue.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(5),
         ),
-        child: const Row(
-          children: [
-            Icon(Icons.edit, color: Colors.white, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'Update',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
+        child: Icon(Icons.edit, color: Colors.white, size: 24),
       ),
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.red.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(5),
         ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              'Delete',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.delete, color: Colors.white, size: 24),
-          ],
-        ),
+        child: Icon(Icons.delete, color: Colors.white, size: 24),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
@@ -88,7 +63,7 @@ class DhikrTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
