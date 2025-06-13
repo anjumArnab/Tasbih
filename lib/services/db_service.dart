@@ -178,4 +178,50 @@ class DbService {
   static Stream<BoxEvent> watchDhikr() {
     return _dhikrBox.watch();
   }
+
+  // Add these methods to your DbService class
+
+  // Update - Decrement dhikr count
+  static Future<void> decrementDhikrCount(int dhikrId) async {
+    try {
+      final dhikr = getDhikrById(dhikrId);
+      if (dhikr != null) {
+        final currentCount = dhikr.currentCount ?? 0;
+        // Only decrement if current count is greater than 0
+        if (currentCount > 0) {
+          final updatedDhikr = Dhikr(
+            id: dhikr.id,
+            dhikrTitle: dhikr.dhikrTitle,
+            dhikr: dhikr.dhikr,
+            times: dhikr.times,
+            when: dhikr.when,
+            currentCount: currentCount - 1,
+          );
+          await updateDhikr(updatedDhikr);
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to decrement dhikr count: $e');
+    }
+  }
+
+  // Update - Reset dhikr count to 0
+  static Future<void> resetDhikrCount(int dhikrId) async {
+    try {
+      final dhikr = getDhikrById(dhikrId);
+      if (dhikr != null) {
+        final updatedDhikr = Dhikr(
+          id: dhikr.id,
+          dhikrTitle: dhikr.dhikrTitle,
+          dhikr: dhikr.dhikr,
+          times: dhikr.times,
+          when: dhikr.when,
+          currentCount: 0,
+        );
+        await updateDhikr(updatedDhikr);
+      }
+    } catch (e) {
+      throw Exception('Failed to reset dhikr count: $e');
+    }
+  }
 }
