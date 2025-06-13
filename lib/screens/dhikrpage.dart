@@ -394,6 +394,8 @@ class _DhikrpageState extends State<Dhikrpage>
             dhikr: dhikr,
             onTap: () => _handleDhikrTap(dhikr),
             onLongPress: () => _showDhikrOptions(dhikr),
+            onUpdate: _loadDhikrList, // Refresh the list after update
+            onDelete: _loadDhikrList, // Refresh the list after delete
           );
         },
       ),

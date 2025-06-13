@@ -4,8 +4,13 @@ import '../models/dhikr.dart';
 
 class AddDhikrDialog extends StatefulWidget {
   final VoidCallback? onDhikrAdded;
+  final Dhikr? dhikrToEdit; // Optional parameter for editing
 
-  const AddDhikrDialog({super.key, this.onDhikrAdded});
+  const AddDhikrDialog({
+    super.key,
+    this.onDhikrAdded,
+    this.dhikrToEdit, // Add this parameter
+  });
 
   @override
   State<AddDhikrDialog> createState() => _AddDhikrDialogState();
@@ -19,6 +24,20 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
 
   DateTime? _selectedDateTime;
   bool _isLoading = false;
+  bool get _isEditMode => widget.dhikrToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // If editing, populate fields with existing data
+    if (_isEditMode) {
+      _dhikrTitleController.text = widget.dhikrToEdit!.dhikrTitle;
+      _dhikrController.text = widget.dhikrToEdit!.dhikr;
+      _timesToReciteController.text = widget.dhikrToEdit!.times.toString();
+      _selectedDateTime = widget.dhikrToEdit!.when;
+    }
+  }
 
   @override
   void dispose() {
@@ -29,9 +48,11 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
   }
 
   Future<void> _selectDateTime() async {
+    final initialDate = _selectedDateTime ?? DateTime.now();
+
     final date = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: initialDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
@@ -39,7 +60,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
     if (date != null) {
       final time = await showTimePicker(
         context: context,
-        initialTime: TimeOfDay.now(),
+        initialTime: TimeOfDay.fromDateTime(initialDate),
       );
 
       if (time != null) {
@@ -63,35 +84,62 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
       });
 
       try {
-        final newDhikr = Dhikr(
-          dhikrTitle: _dhikrTitleController.text.trim(),
-          dhikr: _dhikrController.text.trim(),
-          times: int.parse(_timesToReciteController.text),
-          when: _selectedDateTime!,
-          currentCount: 0,
-        );
-
-        await DbService.addDhikr(newDhikr);
-
-        if (mounted) {
-          Navigator.of(context).pop();
-
-          // Call the callback to refresh the parent widget
-          widget.onDhikrAdded?.call();
-
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Dhikr added successfully!'),
-              backgroundColor: Colors.green,
-            ),
+        if (_isEditMode) {
+          // Update existing dhikr
+          final updatedDhikr = Dhikr(
+            id: widget.dhikrToEdit!.id,
+            dhikrTitle: _dhikrTitleController.text.trim(),
+            dhikr: _dhikrController.text.trim(),
+            times: int.parse(_timesToReciteController.text),
+            when: _selectedDateTime!,
+            currentCount:
+                widget.dhikrToEdit!.currentCount, // Preserve current count
           );
+
+          await DbService.updateDhikr(updatedDhikr);
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onDhikrAdded?.call();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Dhikr updated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Add new dhikr
+          final newDhikr = Dhikr(
+            dhikrTitle: _dhikrTitleController.text.trim(),
+            dhikr: _dhikrController.text.trim(),
+            times: int.parse(_timesToReciteController.text),
+            when: _selectedDateTime!,
+            currentCount: 0,
+          );
+
+          await DbService.addDhikr(newDhikr);
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onDhikrAdded?.call();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Dhikr added successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to add dhikr: $e'),
+              content: Text(
+                'Failed to ${_isEditMode ? 'update' : 'add'} dhikr: $e',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -125,9 +173,9 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Add New Dhikr',
-                style: TextStyle(
+              Text(
+                _isEditMode ? 'Edit Dhikr' : 'Add New Dhikr',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
@@ -269,7 +317,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
                                   ),
                                 ),
                               )
-                              : const Text('Save'),
+                              : Text(_isEditMode ? 'Update' : 'Save'),
                     ),
                   ),
                 ],

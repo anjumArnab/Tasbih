@@ -179,8 +179,6 @@ class DbService {
     return _dhikrBox.watch();
   }
 
-  // Add these methods to your DbService class
-
   // Update - Decrement dhikr count
   static Future<void> decrementDhikrCount(int dhikrId) async {
     try {
