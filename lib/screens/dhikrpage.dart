@@ -3,6 +3,7 @@ import '../widgets/dhikr_dialog.dart';
 import '../widgets/dhikr_tile.dart';
 import '../models/dhikr.dart';
 import '../services/db_service.dart';
+import '../screens/homepage.dart';
 
 class Dhikrpage extends StatefulWidget {
   const Dhikrpage({super.key});
@@ -172,7 +173,17 @@ class _DhikrpageState extends State<Dhikrpage>
     );
   }
 
+  // Modified to navigate to Homepage with selected dhikr
   Future<void> _handleDhikrTap(Dhikr dhikr) async {
+    // Navigate to Homepage with the selected dhikr
+    final result = await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => Homepage(selectedDhikr: dhikr)),
+    );
+  }
+
+  // Keep the original functionality for long press or show options
+  Future<void> _showDhikrOptions(Dhikr dhikr) async {
     showDialog(
       context: context,
       builder:
@@ -209,6 +220,13 @@ class _DhikrpageState extends State<Dhikrpage>
                   },
                   child: const Text('Count +1'),
                 ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleDhikrTap(dhikr);
+                },
+                child: const Text('Start Counting'),
+              ),
               if (dhikr.id != null)
                 TextButton(
                   onPressed: () async {
@@ -372,7 +390,11 @@ class _DhikrpageState extends State<Dhikrpage>
         separatorBuilder: (context, index) => const SizedBox(height: 5),
         itemBuilder: (context, index) {
           final dhikr = dhikrList[index];
-          return DhikrTile(dhikr: dhikr, onTap: () => _handleDhikrTap(dhikr));
+          return DhikrTile(
+            dhikr: dhikr,
+            onTap: () => _handleDhikrTap(dhikr),
+            onLongPress: () => _showDhikrOptions(dhikr),
+          );
         },
       ),
     );
