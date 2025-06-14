@@ -8,7 +8,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(DhikrAdapter());
-  await DbService.init();
+  // Initialize database on app start
+  try {
+    await DbService.init();
+  } catch (e) {
+    debugPrint('Failed to initialize database on startup: $e');
+  }
 
   runApp(const Tasbih());
 }
