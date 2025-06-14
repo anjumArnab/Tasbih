@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_snack_bar.dart';
 import '../widgets/dhikr_tile.dart';
 import '../widgets/animated_circle_button.dart';
 import '../screens/dhikrpage.dart';
@@ -78,7 +79,10 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
-      debugPrint('Failed to load first incomplete dhikr: $e');
+      AppSnackbar.showError(
+        context,
+        'Failed to load first incomplete dhikr: $e',
+      );
     }
   }
 
@@ -123,30 +127,24 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
             // Show a brief message about switching to next dhikr
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Switched to: ${nextDhikr.dhikrTitle}'),
-                  duration: const Duration(seconds: 2),
-                  backgroundColor: Colors.green,
-                ),
+              AppSnackbar.showSuccess(
+                context,
+                'Switched to: ${nextDhikr.dhikrTitle}',
               );
             }
           } else {
             // All dhikrs are complete
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('All dhikrs completed! Well done!'),
-                  duration: Duration(seconds: 3),
-                  backgroundColor: Colors.blue,
-                ),
-              );
+              AppSnackbar.showInfo(context, 'All dhikrs completed! Well done!');
             }
           }
         }
       }
     } catch (e) {
-      debugPrint('Failed to load next incomplete dhikr: $e');
+      AppSnackbar.showError(
+        context,
+        'Failed to load next incomplete dhikr: $e',
+      );
     }
   }
 
@@ -179,7 +177,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           }
         }
       } catch (e) {
-        debugPrint('Failed to update dhikr count: $e');
+        AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
         return; // Don't update UI if database update failed
       }
     } else {
@@ -208,7 +206,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           });
         }
       } catch (e) {
-        debugPrint('Failed to update dhikr count: $e');
+        AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
         return; // Don't update UI if database update failed
       }
     } else {
@@ -237,7 +235,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           });
         }
       } catch (e) {
-        debugPrint('Failed to reset dhikr count: $e');
+        AppSnackbar.showError(context, 'Failed to reset dhikr count: $e');
         return; // Don't update UI if database update failed
       }
     } else {
@@ -291,11 +289,13 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           children: [
             // Dhikr info section (if a dhikr is selected)
             if (_currentDhikr != null) DhikrTile(dhikr: _currentDhikr!),
-            // Counter section
+            // Counter section with reduced spacing
             Expanded(
-              child: Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20), // Reduced from default
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment:
+                      MainAxisAlignment.start, // Changed from center
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
@@ -308,7 +308,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 40), // Reduced from 60
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
