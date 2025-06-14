@@ -3,6 +3,7 @@ import '../models/dhikr.dart';
 
 class DbService {
   static const String _boxName = 'dhikr_box';
+  static const String _isInitializedKey = 'is_initialized';
   static Box<Dhikr>? _box;
 
   // Initialize Hive and open the box
@@ -13,6 +14,114 @@ class DbService {
     }
 
     _box = await Hive.openBox<Dhikr>(_boxName);
+
+    // Add initial data if this is the first time opening the app
+    await _addInitialDataIfNeeded();
+  }
+
+  // Add initial data if the database hasn't been initialized before
+  static Future<void> _addInitialDataIfNeeded() async {
+    try {
+      // Check if we've already added initial data
+      final preferences = await Hive.openBox('app_preferences');
+      final isInitialized = preferences.get(
+        _isInitializedKey,
+        defaultValue: false,
+      );
+
+      if (!isInitialized) {
+        // Clear any existing data first (optional)
+        await _dhikrBox.clear();
+
+        // Add initial dhikr data
+        final now = DateTime.now();
+        final initialDhikrList = [
+          Dhikr(
+            id: 0,
+            dhikrTitle: 'Subhan Allah',
+            dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
+            times: 33,
+            when: now.subtract(const Duration(hours: 2)),
+            currentCount: 0,
+          ),
+          Dhikr(
+            id: 1,
+            dhikrTitle: 'Alhamdulillah',
+            dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
+            times: 33,
+            when: now.subtract(const Duration(hours: 1)),
+            currentCount: 0,
+          ),
+          Dhikr(
+            id: 2,
+            dhikrTitle: 'Allahu Akbar',
+            dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
+            times: 34,
+            when: now.subtract(const Duration(minutes: 30)),
+            currentCount: 0,
+          ),
+        ];
+
+        // Add each dhikr to the database
+        for (final dhikr in initialDhikrList) {
+          await _dhikrBox.add(dhikr);
+        }
+
+        // Mark as initialized so we don't add initial data again
+        await preferences.put(_isInitializedKey, true);
+        await preferences.close();
+      } else {
+        await preferences.close();
+      }
+    } catch (e) {
+      throw Exception('Failed to add initial data: $e');
+    }
+  }
+
+  // Alternative method: Reset database with initial data (call this if you want to reset)
+  static Future<void> resetToInitialData() async {
+    try {
+      await _dhikrBox.clear();
+
+      final now = DateTime.now();
+      final initialDhikrList = [
+        Dhikr(
+          id: 0,
+          dhikrTitle: 'Subhan Allah',
+          dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
+          times: 33,
+          when: now.subtract(const Duration(hours: 2)),
+          currentCount: 15,
+        ),
+        Dhikr(
+          id: 1,
+          dhikrTitle: 'Alhamdulillah',
+          dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
+          times: 33,
+          when: now.subtract(const Duration(hours: 1)),
+          currentCount: 33,
+        ),
+        Dhikr(
+          id: 2,
+          dhikrTitle: 'Allahu Akbar',
+          dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
+          times: 34,
+          when: now.subtract(const Duration(minutes: 30)),
+          currentCount: 0,
+        ),
+      ];
+
+      for (final dhikr in initialDhikrList) {
+        await _dhikrBox.add(dhikr);
+      }
+
+      // Reset the initialization flag
+      final preferences = await Hive.openBox('app_preferences');
+      await preferences.put(_isInitializedKey, true);
+      await preferences.close();
+    } catch (e) {
+      throw Exception('Failed to reset to initial data: $e');
+    }
   }
 
   // Get the box instance
