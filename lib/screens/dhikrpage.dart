@@ -51,8 +51,9 @@ class _DhikrpageState extends State<Dhikrpage>
           ),
         );
       }
-      // Initialize with mock data if database fails
-      _generateMockData();
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -68,11 +69,6 @@ class _DhikrpageState extends State<Dhikrpage>
         _allDhikrList = dhikrList;
         _isLoading = false;
       });
-
-      // If no data exists, add some mock data
-      if (_allDhikrList.isEmpty) {
-        await _addMockData();
-      }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -86,76 +82,6 @@ class _DhikrpageState extends State<Dhikrpage>
         );
       }
     }
-  }
-
-  Future<void> _addMockData() async {
-    try {
-      final now = DateTime.now();
-      final mockDhikrList = [
-        Dhikr(
-          dhikrTitle: 'Subhan Allah',
-          dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
-          times: 33,
-          when: now.subtract(const Duration(hours: 2)),
-          currentCount: 15,
-        ),
-        Dhikr(
-          dhikrTitle: 'Alhamdulillah',
-          dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
-          times: 33,
-          when: now.subtract(const Duration(hours: 1)),
-          currentCount: 33,
-        ),
-        Dhikr(
-          dhikrTitle: 'Allahu Akbar',
-          dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
-          times: 34,
-          when: now.subtract(const Duration(minutes: 30)),
-          currentCount: 0,
-        ),
-      ];
-
-      for (final dhikr in mockDhikrList) {
-        await DbService.addDhikr(dhikr);
-      }
-
-      await _loadDhikrList();
-    } catch (e) {
-      debugPrint('Failed to add mock data: $e');
-    }
-  }
-
-  void _generateMockData() {
-    final now = DateTime.now();
-    _allDhikrList = [
-      Dhikr(
-        id: 1,
-        dhikrTitle: 'Subhan Allah',
-        dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
-        times: 33,
-        when: now.subtract(const Duration(hours: 2)),
-        currentCount: 15,
-      ),
-      Dhikr(
-        id: 2,
-        dhikrTitle: 'Alhamdulillah',
-        dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
-        times: 33,
-        when: now.subtract(const Duration(hours: 1)),
-        currentCount: 33,
-      ),
-      Dhikr(
-        id: 3,
-        dhikrTitle: 'Allahu Akbar',
-        dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
-        times: 34,
-        when: now.subtract(const Duration(minutes: 30)),
-        currentCount: 0,
-      ),
-    ];
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   List<Dhikr> get _upcomingDhikr {
@@ -292,7 +218,7 @@ class _DhikrpageState extends State<Dhikrpage>
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = Colors.grey[50];
+    final backgroundColor = Colors.white;
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(

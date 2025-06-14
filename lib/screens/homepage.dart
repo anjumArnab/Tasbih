@@ -25,8 +25,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _currentDhikr = widget.selectedDhikr;
-    _counter = _currentDhikr?.currentCount ?? 0;
+    _initializeDhikr();
 
     _incrementController = AnimationController(
       duration: const Duration(milliseconds: 150),
@@ -44,6 +43,113 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
     );
   }
 
+  void _initializeDhikr() {
+    if (widget.selectedDhikr != null) {
+      // If a specific dhikr was selected, use it
+      _currentDhikr = widget.selectedDhikr;
+      _counter = _currentDhikr?.currentCount ?? 0;
+    } else {
+      // Auto-start with first incomplete dhikr
+      _loadFirstIncompleteDhikr();
+    }
+  }
+
+  Future<void> _loadFirstIncompleteDhikr() async {
+    try {
+      // Initialize database if not already done
+      await DbService.init();
+
+      // Get all dhikrs and find the first incomplete one
+      final allDhikrs = DbService.getAllDhikr();
+
+      if (allDhikrs.isNotEmpty) {
+        // Find first incomplete dhikr
+        final incompleteDhikr = allDhikrs.firstWhere(
+          (dhikr) => (dhikr.currentCount ?? 0) < dhikr.times,
+          orElse:
+              () =>
+                  allDhikrs
+                      .first, // Fallback to first dhikr if all are complete
+        );
+
+        setState(() {
+          _currentDhikr = incompleteDhikr;
+          _counter = incompleteDhikr.currentCount ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load first incomplete dhikr: $e');
+    }
+  }
+
+  Future<void> _loadNextIncompleteDhikr() async {
+    try {
+      final allDhikrs = DbService.getAllDhikr();
+
+      if (allDhikrs.isNotEmpty && _currentDhikr != null) {
+        // Find current dhikr index
+        final currentIndex = allDhikrs.indexWhere(
+          (dhikr) => dhikr.id == _currentDhikr!.id,
+        );
+
+        if (currentIndex != -1) {
+          // Look for next incomplete dhikr starting from the next index
+          Dhikr? nextDhikr;
+
+          // First, check dhikrs after the current one
+          for (int i = currentIndex + 1; i < allDhikrs.length; i++) {
+            if ((allDhikrs[i].currentCount ?? 0) < allDhikrs[i].times) {
+              nextDhikr = allDhikrs[i];
+              break;
+            }
+          }
+
+          // If no incomplete dhikr found after current, check from beginning
+          if (nextDhikr == null) {
+            for (int i = 0; i < currentIndex; i++) {
+              if ((allDhikrs[i].currentCount ?? 0) < allDhikrs[i].times) {
+                nextDhikr = allDhikrs[i];
+                break;
+              }
+            }
+          }
+
+          // If we found a next incomplete dhikr, switch to it
+          if (nextDhikr != null) {
+            setState(() {
+              _currentDhikr = nextDhikr;
+              _counter = nextDhikr!.currentCount ?? 0;
+            });
+
+            // Show a brief message about switching to next dhikr
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Switched to: ${nextDhikr.dhikrTitle}'),
+                  duration: const Duration(seconds: 2),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } else {
+            // All dhikrs are complete
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All dhikrs completed! Well done!'),
+                  duration: Duration(seconds: 3),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load next incomplete dhikr: $e');
+    }
+  }
+
   @override
   void dispose() {
     _incrementController.dispose();
@@ -52,20 +158,35 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _increment() async {
-    setState(() {
-      _counter++;
-    });
-
-    // Update the dhikr in database if we have a selected dhikr
+    // Update the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null) {
       try {
         await DbService.incrementDhikrCount(_currentDhikr!.id!);
-        // Update the current dhikr object
-        _currentDhikr = _currentDhikr!.copyWith(currentCount: _counter);
+        // Get the updated dhikr from database to ensure sync
+        final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
+        if (updatedDhikr != null) {
+          setState(() {
+            _currentDhikr = updatedDhikr;
+            _counter = updatedDhikr.currentCount ?? 0;
+          });
+
+          // Check if dhikr is now complete and auto-progress
+          if ((updatedDhikr.currentCount ?? 0) >= updatedDhikr.times) {
+            // Wait a moment to show completion, then move to next
+            Future.delayed(const Duration(milliseconds: 500), () {
+              _loadNextIncompleteDhikr();
+            });
+          }
+        }
       } catch (e) {
-        // Handle error silently or show snackbar
         debugPrint('Failed to update dhikr count: $e');
+        return; // Don't update UI if database update failed
       }
+    } else {
+      // If no dhikr selected, just update local counter
+      setState(() {
+        _counter++;
+      });
     }
 
     _incrementController.forward().then((_) {
@@ -74,20 +195,27 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _decrement() async {
-    setState(() {
-      if (_counter > 0) _counter--;
-    });
-
-    // Update the dhikr in database if we have a selected dhikr
+    // Update the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null && _currentDhikr!.id != null) {
       try {
         await DbService.decrementDhikrCount(_currentDhikr!.id!);
-        // Update the current dhikr object
-        _currentDhikr = _currentDhikr!.copyWith(currentCount: _counter);
+        // Get the updated dhikr from database to ensure sync
+        final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
+        if (updatedDhikr != null) {
+          setState(() {
+            _currentDhikr = updatedDhikr;
+            _counter = updatedDhikr.currentCount ?? 0;
+          });
+        }
       } catch (e) {
-        // Handle error silently or show snackbar
         debugPrint('Failed to update dhikr count: $e');
+        return; // Don't update UI if database update failed
       }
+    } else {
+      // If no dhikr selected, just update local counter
+      setState(() {
+        if (_counter > 0) _counter--;
+      });
     }
 
     _decrementController.forward().then((_) {
@@ -96,20 +224,27 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _reset() async {
-    setState(() {
-      _counter = 0;
-    });
-
-    // Reset the dhikr in database if we have a selected dhikr
+    // Reset the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null && _currentDhikr!.id != null) {
       try {
         await DbService.resetDhikrCount(_currentDhikr!.id!);
-        // Update the current dhikr object
-        _currentDhikr = _currentDhikr!.copyWith(currentCount: 0);
+        // Get the updated dhikr from database to ensure sync
+        final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
+        if (updatedDhikr != null) {
+          setState(() {
+            _currentDhikr = updatedDhikr;
+            _counter = 0;
+          });
+        }
       } catch (e) {
-        // Handle error silently or show snackbar
         debugPrint('Failed to reset dhikr count: $e');
+        return; // Don't update UI if database update failed
       }
+    } else {
+      // If no dhikr selected, just reset local counter
+      setState(() {
+        _counter = 0;
+      });
     }
   }
 
@@ -123,13 +258,13 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final backgroundColor = Colors.grey[50];
+    final backgroundColor = Colors.white;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
-          _currentDhikr != null ? _currentDhikr!.dhikrTitle : 'Tasbih',
+          'Tasbih',
           style: const TextStyle(
             fontWeight: FontWeight.w500,
             color: Colors.black87,
