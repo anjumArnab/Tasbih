@@ -105,7 +105,7 @@ class _DhikrpageState extends State<Dhikrpage>
     await Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => Homepage(selectedDhikr: dhikr)),
-      (route) => false, // This removes all previous routes
+      (route) => false,
     );
   }
 
