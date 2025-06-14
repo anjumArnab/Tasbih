@@ -102,9 +102,10 @@ class _DhikrpageState extends State<Dhikrpage>
   // Modified to navigate to Homepage with selected dhikr
   Future<void> _handleDhikrTap(Dhikr dhikr) async {
     // Navigate to Homepage with the selected dhikr
-    await Navigator.pushReplacement(
+    await Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => Homepage(selectedDhikr: dhikr)),
+      (route) => false, // This removes all previous routes
     );
   }
 
