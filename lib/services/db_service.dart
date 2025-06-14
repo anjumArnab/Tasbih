@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import '../models/dhikr.dart';
+import '../data/init_dhikr_data.dart';
 
 class DbService {
   static const String _boxName = 'dhikr_box';
@@ -33,34 +34,8 @@ class DbService {
         // Clear any existing data first (optional)
         await _dhikrBox.clear();
 
-        // Add initial dhikr data
-        final now = DateTime.now();
-        final initialDhikrList = [
-          Dhikr(
-            id: 0,
-            dhikrTitle: 'Subhan Allah',
-            dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
-            times: 33,
-            when: now.subtract(const Duration(hours: 2)),
-            currentCount: 0,
-          ),
-          Dhikr(
-            id: 1,
-            dhikrTitle: 'Alhamdulillah',
-            dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
-            times: 33,
-            when: now.subtract(const Duration(hours: 1)),
-            currentCount: 0,
-          ),
-          Dhikr(
-            id: 2,
-            dhikrTitle: 'Allahu Akbar',
-            dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
-            times: 34,
-            when: now.subtract(const Duration(minutes: 30)),
-            currentCount: 0,
-          ),
-        ];
+        // Get initial dhikr data from the separate file
+        final initialDhikrList = InitialDhikrData.getInitialDhikrList();
 
         // Add each dhikr to the database
         for (final dhikr in initialDhikrList) {
@@ -78,52 +53,6 @@ class DbService {
     }
   }
 
-  // Alternative method: Reset database with initial data (call this if you want to reset)
-  static Future<void> resetToInitialData() async {
-    try {
-      await _dhikrBox.clear();
-
-      final now = DateTime.now();
-      final initialDhikrList = [
-        Dhikr(
-          id: 0,
-          dhikrTitle: 'Subhan Allah',
-          dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
-          times: 33,
-          when: now.subtract(const Duration(hours: 2)),
-          currentCount: 15,
-        ),
-        Dhikr(
-          id: 1,
-          dhikrTitle: 'Alhamdulillah',
-          dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
-          times: 33,
-          when: now.subtract(const Duration(hours: 1)),
-          currentCount: 33,
-        ),
-        Dhikr(
-          id: 2,
-          dhikrTitle: 'Allahu Akbar',
-          dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
-          times: 34,
-          when: now.subtract(const Duration(minutes: 30)),
-          currentCount: 0,
-        ),
-      ];
-
-      for (final dhikr in initialDhikrList) {
-        await _dhikrBox.add(dhikr);
-      }
-
-      // Reset the initialization flag
-      final preferences = await Hive.openBox('app_preferences');
-      await preferences.put(_isInitializedKey, true);
-      await preferences.close();
-    } catch (e) {
-      throw Exception('Failed to reset to initial data: $e');
-    }
-  }
-
   // Get the box instance
   static Box<Dhikr> get _dhikrBox {
     if (_box == null || !_box!.isOpen) {
@@ -135,8 +64,13 @@ class DbService {
   // Create - Add a new dhikr
   static Future<int> addDhikr(Dhikr dhikr) async {
     try {
-      // Generate a new ID based on the current length
-      final newId = _dhikrBox.length;
+      // Generate a new ID to avoid conflicts
+      final existingIds = _dhikrBox.values.map((d) => d.id ?? 0).toList();
+      int newId = 0;
+      while (existingIds.contains(newId)) {
+        newId++;
+      }
+
       final dhikrWithId = Dhikr(
         id: newId,
         dhikrTitle: dhikr.dhikrTitle,
@@ -234,10 +168,84 @@ class DbService {
           when: dhikr.when,
           currentCount: (dhikr.currentCount ?? 0) + 1,
         );
-        await updateDhikr(updatedDhikr);
+
+        // Find the index and update
+        final index = _dhikrBox.values.toList().indexWhere(
+          (d) => d.id == dhikrId,
+        );
+
+        if (index != -1) {
+          await _dhikrBox.putAt(index, updatedDhikr);
+        } else {
+          throw Exception('Dhikr not found');
+        }
       }
     } catch (e) {
       throw Exception('Failed to increment dhikr count: $e');
+    }
+  }
+
+  // Update - Decrement dhikr count
+  static Future<void> decrementDhikrCount(int dhikrId) async {
+    try {
+      final dhikr = getDhikrById(dhikrId);
+      if (dhikr != null) {
+        final currentCount = dhikr.currentCount ?? 0;
+        // Only decrement if current count is greater than 0
+        if (currentCount > 0) {
+          final updatedDhikr = Dhikr(
+            id: dhikr.id,
+            dhikrTitle: dhikr.dhikrTitle,
+            dhikr: dhikr.dhikr,
+            times: dhikr.times,
+            when: dhikr.when,
+            currentCount: currentCount - 1,
+          );
+
+          // Find the index and update
+          final index = _dhikrBox.values.toList().indexWhere(
+            (d) => d.id == dhikrId,
+          );
+
+          if (index != -1) {
+            await _dhikrBox.putAt(index, updatedDhikr);
+          } else {
+            throw Exception('Dhikr not found');
+          }
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to decrement dhikr count: $e');
+    }
+  }
+
+  // Update - Reset dhikr count to 0
+  static Future<void> resetDhikrCount(int dhikrId) async {
+    try {
+      final dhikr = getDhikrById(dhikrId);
+      if (dhikr != null) {
+        final updatedDhikr = Dhikr(
+          id: dhikr.id,
+          dhikrTitle: dhikr.dhikrTitle,
+          dhikr: dhikr.dhikr,
+          times: dhikr.times,
+          when: dhikr.when,
+          currentCount: 0,
+        );
+
+        // Find the index and update
+        final index = _dhikrBox.values.toList().indexWhere(
+          (d) => d.id == dhikrId,
+        );
+
+        if (index != -1) {
+          await _dhikrBox.putAt(index, updatedDhikr);
+        } else {
+          throw Exception('Dhikr not found');
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to reset dhikr count: $e');
     }
   }
 
@@ -286,49 +294,5 @@ class DbService {
   // Listen to changes in the database
   static Stream<BoxEvent> watchDhikr() {
     return _dhikrBox.watch();
-  }
-
-  // Update - Decrement dhikr count
-  static Future<void> decrementDhikrCount(int dhikrId) async {
-    try {
-      final dhikr = getDhikrById(dhikrId);
-      if (dhikr != null) {
-        final currentCount = dhikr.currentCount ?? 0;
-        // Only decrement if current count is greater than 0
-        if (currentCount > 0) {
-          final updatedDhikr = Dhikr(
-            id: dhikr.id,
-            dhikrTitle: dhikr.dhikrTitle,
-            dhikr: dhikr.dhikr,
-            times: dhikr.times,
-            when: dhikr.when,
-            currentCount: currentCount - 1,
-          );
-          await updateDhikr(updatedDhikr);
-        }
-      }
-    } catch (e) {
-      throw Exception('Failed to decrement dhikr count: $e');
-    }
-  }
-
-  // Update - Reset dhikr count to 0
-  static Future<void> resetDhikrCount(int dhikrId) async {
-    try {
-      final dhikr = getDhikrById(dhikrId);
-      if (dhikr != null) {
-        final updatedDhikr = Dhikr(
-          id: dhikr.id,
-          dhikrTitle: dhikr.dhikrTitle,
-          dhikr: dhikr.dhikr,
-          times: dhikr.times,
-          when: dhikr.when,
-          currentCount: 0,
-        );
-        await updateDhikr(updatedDhikr);
-      }
-    } catch (e) {
-      throw Exception('Failed to reset dhikr count: $e');
-    }
   }
 }
