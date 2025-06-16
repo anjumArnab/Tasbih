@@ -84,8 +84,6 @@ class _TasbihDrawerState extends State<TasbihDrawer> {
     if (activeDates.isEmpty) return 0;
 
     // Sort dates in descending order (most recent first)
-    List<DateTime> sortedDates =
-        activeDates.toList()..sort((a, b) => b.compareTo(a));
 
     final today = DateTime.now();
     final todayNormalized = DateTime(today.year, today.month, today.day);
