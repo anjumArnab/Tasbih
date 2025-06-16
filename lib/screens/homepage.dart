@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/tasbih_drawer.dart';
 import '../widgets/app_snack_bar.dart';
 import '../widgets/dhikr_tile.dart';
 import '../widgets/animated_circle_button.dart';
@@ -278,6 +279,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           const SizedBox(width: 15),
         ],
       ),
+      drawer: const TasbihDrawer(),
       floatingActionButton: FloatingActionButton(
         onPressed: _reset,
         backgroundColor: Colors.black87,
