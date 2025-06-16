@@ -225,61 +225,68 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
               ),
               const SizedBox(height: 16),
 
-              // Times to Recite Field
-              TextFormField(
-                controller: _timesToReciteController,
-                decoration: const InputDecoration(
-                  labelText: 'Times to Recite',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter number of times';
-                  }
-                  if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                    return 'Please enter a valid positive number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // When to Recite Field
-              InkWell(
-                onTap: _isLoading ? null : _selectDateTime,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _selectedDateTime == null
-                            ? 'When to Recite'
-                            : '${_selectedDateTime!.day}/${_selectedDateTime!.month}/${_selectedDateTime!.year} at ${_selectedDateTime!.hour.toString().padLeft(2, '0')}:${_selectedDateTime!.minute.toString().padLeft(2, '0')}',
-                        style: TextStyle(
-                          color:
-                              _selectedDateTime == null
-                                  ? Colors.grey[600]
-                                  : Colors.black87,
-                          fontSize: 16,
+              // Times to Recite and When to Recite Row
+              Row(
+                children: [
+                  // Times to Recite Field (smaller width)
+                  SizedBox(
+                    width: 120,
+                    child: TextFormField(
+                      controller: _timesToReciteController,
+                      decoration: const InputDecoration(
+                        labelText: 'Times',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
                         ),
                       ),
-                      const Icon(Icons.calendar_today, color: Colors.grey),
-                    ],
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter number';
+                        }
+                        if (int.tryParse(value) == null ||
+                            int.parse(value) <= 0) {
+                          return 'Enter valid number';
+                        }
+                        return null;
+                      },
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+
+                  // When to Recite Field (takes remaining space)
+                  Expanded(
+                    child: InkWell(
+                      onTap: _isLoading ? null : _selectDateTime,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'When to Recite',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          suffixIcon: Icon(Icons.calendar_today),
+                        ),
+                        child: Text(
+                          _selectedDateTime == null
+                              ? 'Select date and time'
+                              : '${_selectedDateTime!.day}/${_selectedDateTime!.month}/${_selectedDateTime!.year} at ${_selectedDateTime!.hour.toString().padLeft(2, '0')}:${_selectedDateTime!.minute.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            color:
+                                _selectedDateTime == null
+                                    ? Colors.grey[600]
+                                    : Colors.black87,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
