@@ -33,7 +33,7 @@ class DhikrTile extends StatelessWidget {
           color: Colors.blue.withOpacity(0.5),
           borderRadius: BorderRadius.circular(5),
         ),
-        child: Icon(Icons.edit, color: Colors.white, size: 24),
+        child: const Icon(Icons.edit, color: Colors.white, size: 24),
       ),
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
@@ -42,15 +42,13 @@ class DhikrTile extends StatelessWidget {
           color: Colors.red.withOpacity(0.5),
           borderRadius: BorderRadius.circular(5),
         ),
-        child: Icon(Icons.delete, color: Colors.white, size: 24),
+        child: const Icon(Icons.delete, color: Colors.white, size: 24),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          // Left to right swipe - Update
           _showUpdateDialog(context);
-          return false; // Don't dismiss the tile
+          return false;
         } else if (direction == DismissDirection.endToStart) {
-          // Right to left swipe - Delete
           return await _showDeleteConfirmationDialog(context);
         }
         return false;
@@ -216,17 +214,7 @@ class DhikrTile extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays == 0) {
-      return DateFormat('HH:mm').format(dateTime);
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return DateFormat('EEEE').format(dateTime);
-    } else {
-      return DateFormat('MMM dd').format(dateTime);
-    }
+    // Example output: Jun 25, 2025 – 09:15 PM
+    return DateFormat('MMM dd, yyyy - hh:mm a').format(dateTime);
   }
 }
