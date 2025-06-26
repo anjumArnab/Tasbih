@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/rounded_button.dart';
 import '../services/db_service.dart';
 import '../models/dhikr.dart';
 
@@ -21,6 +22,8 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
   final _dhikrTitleController = TextEditingController();
   final _dhikrController = TextEditingController();
   final _timesToReciteController = TextEditingController();
+
+  static const Color backgroundColor = Color(0xFFF8FBFF);
 
   DateTime? _selectedDateTime;
   bool _isLoading = false;
@@ -164,6 +167,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: backgroundColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -295,36 +299,19 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   Expanded(
-                    child: TextButton(
-                      onPressed:
+                    child: RoundedButton(
+                      text: 'Cancel',
+                      onTap:
                           _isLoading ? null : () => Navigator.of(context).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      textColor: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveDhikr,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black87,
-                        foregroundColor: Colors.white,
-                      ),
-                      child:
-                          _isLoading
-                              ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                              : Text(_isEditMode ? 'Update' : 'Save'),
+                    child: RoundedButton(
+                      text: _isEditMode ? 'Update' : 'Save',
+                      onTap: _isLoading ? null : _saveDhikr,
+                      textColor: Colors.white,
                     ),
                   ),
                 ],
