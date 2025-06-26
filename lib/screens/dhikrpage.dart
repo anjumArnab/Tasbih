@@ -1,9 +1,11 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
+import '../screens/nav_wrapper.dart';
 import '../widgets/dhikr_dialog.dart';
 import '../widgets/dhikr_tile.dart';
 import '../models/dhikr.dart';
 import '../services/db_service.dart';
-import '../screens/homepage.dart';
 
 class Dhikrpage extends StatefulWidget {
   const Dhikrpage({super.key});
@@ -12,23 +14,23 @@ class Dhikrpage extends StatefulWidget {
   State<Dhikrpage> createState() => _DhikrpageState();
 }
 
-class _DhikrpageState extends State<Dhikrpage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _DhikrpageState extends State<Dhikrpage> {
   List<Dhikr> _allDhikrList = [];
+  List<Dhikr> _filteredDhikrList = [];
   bool _isLoading = true;
+  String selectedFilter = 'all';
+
+  // Updated color scheme
+  static const Color primaryColor = Color(0xFF0F4C75);
+  static const Color secondaryColor = Color(0xFF3282B8);
+  static const Color accentColor = Color(0xFF00A8CC);
+  static const Color lightAccent = Color(0xFFBBE1FA);
+  static const Color backgroundColor = Color(0xFFF8FBFF);
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _initializeDatabase();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _initializeDatabase() async {
@@ -36,7 +38,6 @@ class _DhikrpageState extends State<Dhikrpage>
       await DbService.init();
       await _loadDhikrList();
 
-      // Listen to database changes
       DbService.watchDhikr().listen((event) {
         if (mounted) {
           _loadDhikrList();
@@ -67,6 +68,7 @@ class _DhikrpageState extends State<Dhikrpage>
 
       setState(() {
         _allDhikrList = dhikrList;
+        _applyFilters();
         _isLoading = false;
       });
     } catch (e) {
@@ -84,12 +86,64 @@ class _DhikrpageState extends State<Dhikrpage>
     }
   }
 
-  List<Dhikr> get _upcomingDhikr {
-    return DbService.getUpcomingDhikr();
+  void _applyFilters() {
+    setState(() {
+      switch (selectedFilter) {
+        case 'upcoming':
+          _filteredDhikrList = DbService.getUpcomingDhikr();
+          break;
+        case 'completed':
+          _filteredDhikrList = DbService.getCompletedDhikr();
+          break;
+        case 'all':
+        default:
+          _filteredDhikrList = _allDhikrList;
+          break;
+      }
+    });
   }
 
-  List<Dhikr> get _completedDhikr {
-    return DbService.getCompletedDhikr();
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = selectedFilter == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedFilter = value;
+          _applyFilters();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          gradient:
+              isSelected
+                  ? const LinearGradient(colors: [primaryColor, secondaryColor])
+                  : null,
+          color: isSelected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : Colors.grey[300]!,
+          ),
+          boxShadow:
+              isSelected
+                  ? [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[600],
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
   }
 
   void _showAddDhikrDialog() {
@@ -99,29 +153,52 @@ class _DhikrpageState extends State<Dhikrpage>
     );
   }
 
-  // Modified to navigate to Homepage with selected dhikr
   Future<void> _handleDhikrTap(Dhikr dhikr) async {
-    // Navigate to Homepage with the selected dhikr
     await Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => Homepage(selectedDhikr: dhikr)),
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                NavigationWrapper(initialIndex: 0, selectedDhikr: dhikr),
+      ),
       (route) => false,
     );
   }
 
-  // Keep the original functionality for long press or show options
   Future<void> _showDhikrOptions(Dhikr dhikr) async {
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text(dhikr.dhikrTitle),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: Text(
+              dhikr.dhikrTitle,
+              style: const TextStyle(
+                color: primaryColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(dhikr.dhikr),
                 const SizedBox(height: 16),
-                Text('Progress: ${dhikr.currentCount ?? 0}/${dhikr.times}'),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: lightAccent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Progress: ${dhikr.currentCount ?? 0}/${dhikr.times}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
               ],
             ),
             actions: [
@@ -130,29 +207,59 @@ class _DhikrpageState extends State<Dhikrpage>
                 child: const Text('Close'),
               ),
               if ((dhikr.currentCount ?? 0) < dhikr.times)
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      await DbService.incrementDhikrCount(dhikr.id!);
-                      Navigator.pop(context);
-                      await _loadDhikrList();
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to update count: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Count +1'),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [accentColor, secondaryColor],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        await DbService.incrementDhikrCount(dhikr.id!);
+                        Navigator.pop(context);
+                        await _loadDhikrList();
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to update count: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Count +1',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
                 ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _handleDhikrTap(dhikr);
-                },
-                child: const Text('Start Counting'),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [primaryColor, secondaryColor],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _handleDhikrTap(dhikr);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Start Counting',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
               ),
               if (dhikr.id != null)
                 TextButton(
@@ -162,7 +269,13 @@ class _DhikrpageState extends State<Dhikrpage>
                       context: context,
                       builder:
                           (context) => AlertDialog(
-                            title: const Text('Delete Dhikr'),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            title: const Text(
+                              'Delete Dhikr',
+                              style: TextStyle(color: Colors.red),
+                            ),
                             content: const Text(
                               'Are you sure you want to delete this dhikr?',
                             ),
@@ -217,59 +330,101 @@ class _DhikrpageState extends State<Dhikrpage>
     );
   }
 
+  String _getEmptyMessage() {
+    switch (selectedFilter) {
+      case 'upcoming':
+        return 'No upcoming dhikr';
+      case 'completed':
+        return 'No completed dhikr';
+      case 'all':
+      default:
+        return 'No dhikr added yet';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = Colors.white;
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text(
           'Dhikr',
-          style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black87),
-        ),
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.black87,
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: Colors.black87,
-          indicatorWeight: 2.0,
-          labelStyle: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: 14,
+            color: Colors.white,
+            fontSize: 20,
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-          ),
-          tabs: const [
-            Tab(text: 'All Dhikr'),
-            Tab(text: 'Upcoming'),
-            Tab(text: 'Completed'),
-          ],
         ),
+        backgroundColor: primaryColor,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [primaryColor, secondaryColor],
+            ),
+          ),
+        ),
+        automaticallyImplyLeading: false,
       ),
-      floatingActionButton: FloatingActionButton(
-        shape: const CircleBorder(),
-        onPressed: _showAddDhikrDialog,
-        backgroundColor: Colors.black87,
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [accentColor, secondaryColor]),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: FloatingActionButton(
+          onPressed: _showAddDhikrDialog,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
       ),
       body:
           _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                controller: _tabController,
+              : Column(
                 children: [
-                  // All Dhikr Tab
-                  _buildDhikrList(_allDhikrList, 'No dhikr added yet'),
-
-                  // Upcoming Tab
-                  _buildDhikrList(_upcomingDhikr, 'No upcoming dhikr'),
-
-                  // Completed Tab
-                  _buildDhikrList(_completedDhikr, 'No completed dhikr'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        _buildFilterChip('All Dhikr', 'all'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Upcoming', 'upcoming'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Completed', 'completed'),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [backgroundColor, Colors.white],
+                        ),
+                      ),
+                      child: _buildDhikrList(
+                        _filteredDhikrList,
+                        _getEmptyMessage(),
+                      ),
+                    ),
+                  ),
                 ],
               ),
     );
