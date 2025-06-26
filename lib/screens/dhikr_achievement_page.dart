@@ -13,6 +13,7 @@ class DhikrAchievementsPage extends StatefulWidget {
 class _DhikrAchievementsPageState extends State<DhikrAchievementsPage> {
   late PageController _pageController;
   int _currentPage = 0;
+  String selectedFilter = 'activity'; // Default to activity section
 
   // Sample data for the activity grid (365 days)
   final List<int> activityData = List.generate(365, (index) {
@@ -42,6 +43,13 @@ class _DhikrAchievementsPageState extends State<DhikrAchievementsPage> {
     super.dispose();
   }
 
+  void _applyFilters() {
+    // This method can be used for any additional filtering logic if needed
+    setState(() {
+      // Filter logic here if needed
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,18 +76,73 @@ class _DhikrAchievementsPageState extends State<DhikrAchievementsPage> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Activity Grid Section with embedded streaks
-              _buildActivityGridSection(),
-              const SizedBox(height: 30),
+        child: Column(
+          children: [
+            // Filter Chips Section
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  _buildFilterChip('Activity', 'activity'),
+                  const SizedBox(width: 10),
+                  _buildFilterChip('Achievements', 'achievements'),
+                ],
+              ),
+            ),
 
-              // Achievements Section
-              _buildAchievementsSection(),
-            ],
+            // Content Section
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child:
+                    selectedFilter == 'activity'
+                        ? _buildActivityGridSection()
+                        : _buildAchievementsSection(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = selectedFilter == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedFilter = value;
+          _applyFilters();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          gradient:
+              isSelected
+                  ? const LinearGradient(colors: [primaryColor, secondaryColor])
+                  : null,
+          color: isSelected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : Colors.grey[300]!,
+          ),
+          boxShadow:
+              isSelected
+                  ? [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[600],
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
       ),
@@ -166,6 +229,7 @@ class _DhikrAchievementsPageState extends State<DhikrAchievementsPage> {
             ),
           ),
         ),
+        const SizedBox(height: 20),
       ],
     );
   }
@@ -340,6 +404,7 @@ class _DhikrAchievementsPageState extends State<DhikrAchievementsPage> {
         ),
         const SizedBox(height: 15),
         _buildActivityLegend(),
+        const SizedBox(height: 20),
       ],
     );
   }

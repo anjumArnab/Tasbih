@@ -386,26 +386,14 @@ class _DhikrpageState extends State<Dhikrpage> {
               : Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
+                    padding: const EdgeInsets.all(20),
+
                     child: Row(
                       children: [
                         _buildFilterChip('All Dhikr', 'all'),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         _buildFilterChip('Upcoming', 'upcoming'),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         _buildFilterChip('Completed', 'completed'),
                       ],
                     ),
