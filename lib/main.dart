@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../screens/homepage.dart';
+import 'package:tasbih/screens/nav_wrapper.dart';
 import '../models/dhikr.dart';
 import '../services/db_service.dart';
 
@@ -30,7 +30,7 @@ class Tasbih extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black87),
         useMaterial3: true,
       ),
-      home: const Homepage(),
+      home: const NavigationWrapper(),
     );
   }
 }
