@@ -3,47 +3,46 @@ import 'package:flutter/material.dart';
 class RoundedButton extends StatelessWidget {
   final String text;
   final VoidCallback? onTap;
-  final Color backgroundColor;
-  final Color textColor;
-  final double fontSize;
-  final FontWeight fontWeight;
   final EdgeInsets padding;
   final double borderRadius;
+  final Color textColor;
+
+  static const Color accentColor = Color(0xFF00A8CC);
+  static const Color secondaryColor = Color(0xFF3282B8);
 
   const RoundedButton({
     super.key,
     required this.text,
     this.onTap,
-    this.backgroundColor = const Color(0xFF424242),
-    this.textColor = Colors.black,
-    this.fontSize = 16,
-    this.fontWeight = FontWeight.w500,
+    this.textColor = Colors.white,
     this.padding = const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
     this.borderRadius = 20,
   });
 
   @override
   Widget build(BuildContext context) {
-    Widget button = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(borderRadius),
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        padding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [accentColor, secondaryColor]),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        child: Container(
+          padding: padding,
+          alignment: Alignment.center,
+          child: Text(text, style: TextStyle(color: textColor)),
         ),
       ),
     );
-
-    if (onTap != null) {
-      return GestureDetector(onTap: onTap, child: button);
-    }
-
-    return button;
   }
 }
