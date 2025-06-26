@@ -1,9 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
-import '../widgets/tasbih_drawer.dart';
 import '../widgets/app_snack_bar.dart';
 import '../widgets/dhikr_tile.dart';
 import '../widgets/animated_circle_button.dart';
-import '../screens/dhikrpage.dart';
 import '../models/dhikr.dart';
 import '../services/db_service.dart';
 
@@ -23,6 +23,11 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   late AnimationController _decrementController;
   late Animation<double> _incrementScale;
   late Animation<double> _decrementScale;
+
+  static const Color primaryColor = Color(0xFF0F4C75);
+  static const Color secondaryColor = Color(0xFF3282B8);
+  static const Color accentColor = Color(0xFF00A8CC);
+  static const Color backgroundColor = Color(0xFFF8FBFF);
 
   @override
   void initState() {
@@ -47,31 +52,22 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
   void _initializeDhikr() {
     if (widget.selectedDhikr != null) {
-      // If a specific dhikr was selected, use it
       _currentDhikr = widget.selectedDhikr;
       _counter = _currentDhikr?.currentCount ?? 0;
     } else {
-      // Auto-start with first incomplete dhikr
       _loadFirstIncompleteDhikr();
     }
   }
 
   Future<void> _loadFirstIncompleteDhikr() async {
     try {
-      // Initialize database if not already done
       await DbService.init();
-
-      // Get all dhikrs and find the first incomplete one
       final allDhikrs = DbService.getAllDhikr();
 
       if (allDhikrs.isNotEmpty) {
-        // Find first incomplete dhikr
         final incompleteDhikr = allDhikrs.firstWhere(
           (dhikr) => (dhikr.currentCount ?? 0) < dhikr.times,
-          orElse:
-              () =>
-                  allDhikrs
-                      .first, // Fallback to first dhikr if all are complete
+          orElse: () => allDhikrs.first,
         );
 
         setState(() {
@@ -92,16 +88,13 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
       final allDhikrs = DbService.getAllDhikr();
 
       if (allDhikrs.isNotEmpty && _currentDhikr != null) {
-        // Find current dhikr index
         final currentIndex = allDhikrs.indexWhere(
           (dhikr) => dhikr.id == _currentDhikr!.id,
         );
 
         if (currentIndex != -1) {
-          // Look for next incomplete dhikr starting from the next index
           Dhikr? nextDhikr;
 
-          // First, check dhikrs after the current one
           for (int i = currentIndex + 1; i < allDhikrs.length; i++) {
             if ((allDhikrs[i].currentCount ?? 0) < allDhikrs[i].times) {
               nextDhikr = allDhikrs[i];
@@ -109,7 +102,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             }
           }
 
-          // If no incomplete dhikr found after current, check from beginning
           if (nextDhikr == null) {
             for (int i = 0; i < currentIndex; i++) {
               if ((allDhikrs[i].currentCount ?? 0) < allDhikrs[i].times) {
@@ -119,14 +111,12 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             }
           }
 
-          // If we found a next incomplete dhikr, switch to it
           if (nextDhikr != null) {
             setState(() {
               _currentDhikr = nextDhikr;
               _counter = nextDhikr!.currentCount ?? 0;
             });
 
-            // Show a brief message about switching to next dhikr
             if (mounted) {
               AppSnackbar.showSuccess(
                 context,
@@ -134,7 +124,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
               );
             }
           } else {
-            // All dhikrs are complete
             if (mounted) {
               AppSnackbar.showInfo(context, 'All dhikrs completed! Well done!');
             }
@@ -157,11 +146,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _increment() async {
-    // Update the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null) {
       try {
         await DbService.incrementDhikrCount(_currentDhikr!.id!);
-        // Get the updated dhikr from database to ensure sync
         final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
         if (updatedDhikr != null) {
           setState(() {
@@ -169,9 +156,7 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             _counter = updatedDhikr.currentCount ?? 0;
           });
 
-          // Check if dhikr is now complete and auto-progress
           if ((updatedDhikr.currentCount ?? 0) >= updatedDhikr.times) {
-            // Wait a moment to show completion, then move to next
             Future.delayed(const Duration(milliseconds: 500), () {
               _loadNextIncompleteDhikr();
             });
@@ -179,10 +164,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         }
       } catch (e) {
         AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
-        return; // Don't update UI if database update failed
+        return;
       }
     } else {
-      // If no dhikr selected, just update local counter
       setState(() {
         _counter++;
       });
@@ -194,11 +178,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _decrement() async {
-    // Update the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null && _currentDhikr!.id != null) {
       try {
         await DbService.decrementDhikrCount(_currentDhikr!.id!);
-        // Get the updated dhikr from database to ensure sync
         final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
         if (updatedDhikr != null) {
           setState(() {
@@ -208,10 +190,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         }
       } catch (e) {
         AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
-        return; // Don't update UI if database update failed
+        return;
       }
     } else {
-      // If no dhikr selected, just update local counter
       setState(() {
         if (_counter > 0) _counter--;
       });
@@ -223,11 +204,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   void _reset() async {
-    // Reset the dhikr in database first if we have a selected dhikr
     if (_currentDhikr != null && _currentDhikr!.id != null) {
       try {
         await DbService.resetDhikrCount(_currentDhikr!.id!);
-        // Get the updated dhikr from database to ensure sync
         final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
         if (updatedDhikr != null) {
           setState(() {
@@ -237,102 +216,109 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         }
       } catch (e) {
         AppSnackbar.showError(context, 'Failed to reset dhikr count: $e');
-        return; // Don't update UI if database update failed
+        return;
       }
     } else {
-      // If no dhikr selected, just reset local counter
       setState(() {
         _counter = 0;
       });
     }
   }
 
-  void _navToDhikrPage(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => Dhikrpage()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final backgroundColor = Colors.white;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Tasbih',
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontSize: 20,
           ),
         ),
-        backgroundColor: backgroundColor,
+        backgroundColor: primaryColor,
         elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: () => _navToDhikrPage(context),
-            icon: const Icon(Icons.arrow_forward_ios),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [primaryColor, secondaryColor],
+            ),
           ),
-          const SizedBox(width: 15),
-        ],
+        ),
       ),
-      drawer: const TasbihDrawer(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _reset,
-        backgroundColor: Colors.black87,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.refresh, color: Colors.white),
+
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [accentColor, secondaryColor]),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: FloatingActionButton(
+          onPressed: _reset,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.refresh, color: Colors.white, size: 28),
+        ),
       ),
+
       body: SafeArea(
         child: Column(
           children: [
-            // Dhikr info section (if a dhikr is selected)
             if (_currentDhikr != null) DhikrTile(dhikr: _currentDhikr!),
-            // Counter section with reduced spacing
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 20), // Reduced from default
-                child: Column(
-                  mainAxisAlignment:
-                      MainAxisAlignment.start, // Changed from center
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      '$_counter',
-                      style: const TextStyle(
-                        fontSize: 60,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.black,
-                        height: 1,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [backgroundColor, Colors.white],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$_counter',
+                        style: TextStyle(
+                          fontSize: 60,
+                          fontWeight: FontWeight.w300,
+                          color: primaryColor,
+                          height: 1,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 40), // Reduced from 60
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        AnimatedCircleButton(
-                          animation: _incrementScale,
-                          onTap: _increment,
-                          icon: Icons.keyboard_arrow_up,
-                          size: screenWidth < 400 ? 120 : 150,
-                          iconSize: screenWidth < 400 ? 60 : 75,
-                        ),
-                        const SizedBox(height: 15),
-                        AnimatedCircleButton(
-                          animation: _decrementScale,
-                          onTap: _decrement,
-                          icon: Icons.keyboard_arrow_down,
-                          size: 50,
-                          iconSize: 25,
-                        ),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(height: 40),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          AnimatedCircleButton(
+                            animation: _incrementScale,
+                            onTap: _increment,
+                            icon: Icons.keyboard_arrow_up,
+                            size: screenWidth < 400 ? 120 : 150,
+                            iconSize: screenWidth < 400 ? 60 : 75,
+                          ),
+                          const SizedBox(height: 15),
+                          AnimatedCircleButton(
+                            animation: _decrementScale,
+                            onTap: _decrement,
+                            icon: Icons.keyboard_arrow_down,
+                            size: 50,
+                            iconSize: 25,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -343,7 +329,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 }
 
-// Extension to add copyWith method to Dhikr model
 extension DhikrExtension on Dhikr {
   Dhikr copyWith({
     int? id,
