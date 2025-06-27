@@ -284,13 +284,6 @@ class DbService {
     }
   }
 
-  // Close the database
-  static Future<void> close() async {
-    if (_box != null && _box!.isOpen) {
-      await _box!.close();
-    }
-  }
-
   // Listen to changes in the database
   static Stream<BoxEvent> watchDhikr() {
     return _dhikrBox.watch();
