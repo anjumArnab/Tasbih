@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../screens/nav_wrapper.dart';
 import '../widgets/dhikr_dialog.dart';
@@ -20,6 +21,9 @@ class _DhikrpageState extends State<Dhikrpage> {
   bool _isLoading = true;
   String selectedFilter = 'all';
 
+  // Add StreamSubscription to properly manage the listener
+  StreamSubscription? _dhikrSubscription;
+
   // Updated color scheme
   static const Color primaryColor = Color(0xFF0F4C75);
   static const Color secondaryColor = Color(0xFF3282B8);
@@ -33,12 +37,20 @@ class _DhikrpageState extends State<Dhikrpage> {
     _initializeDatabase();
   }
 
+  @override
+  void dispose() {
+    // Cancel the stream subscription to prevent memory leaks
+    _dhikrSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initializeDatabase() async {
     try {
       await DbService.init();
       await _loadDhikrList();
 
-      DbService.watchDhikr().listen((event) {
+      // Store the subscription so we can cancel it in dispose()
+      _dhikrSubscription = DbService.watchDhikr().listen((event) {
         if (mounted) {
           _loadDhikrList();
         }
@@ -51,20 +63,26 @@ class _DhikrpageState extends State<Dhikrpage> {
             backgroundColor: Colors.red,
           ),
         );
+        setState(() {
+          _isLoading = false;
+        });
       }
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 
   Future<void> _loadDhikrList() async {
     try {
+      // Check if widget is still mounted before calling setState
+      if (!mounted) return;
+
       setState(() {
         _isLoading = true;
       });
 
       final dhikrList = DbService.getAllDhikr();
+
+      // Check again before the second setState call
+      if (!mounted) return;
 
       setState(() {
         _allDhikrList = dhikrList;
@@ -72,10 +90,10 @@ class _DhikrpageState extends State<Dhikrpage> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load dhikr: $e'),
@@ -87,6 +105,9 @@ class _DhikrpageState extends State<Dhikrpage> {
   }
 
   void _applyFilters() {
+    // Only call setState if widget is still mounted
+    if (!mounted) return;
+
     setState(() {
       switch (selectedFilter) {
         case 'upcoming':
@@ -107,6 +128,7 @@ class _DhikrpageState extends State<Dhikrpage> {
     final isSelected = selectedFilter == value;
     return GestureDetector(
       onTap: () {
+        if (!mounted) return;
         setState(() {
           selectedFilter = value;
           _applyFilters();
@@ -221,12 +243,14 @@ class _DhikrpageState extends State<Dhikrpage> {
                         Navigator.pop(context);
                         await _loadDhikrList();
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to update count: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update count: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(
