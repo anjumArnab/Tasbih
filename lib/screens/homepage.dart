@@ -148,16 +148,23 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   void _increment() async {
     if (_currentDhikr != null) {
       try {
+        // Store the previous count before incrementing
+        final previousCount = _currentDhikr!.currentCount ?? 0;
+
         await DbService.incrementDhikrCount(_currentDhikr!.id!);
         final updatedDhikr = DbService.getDhikrById(_currentDhikr!.id!);
         if (updatedDhikr != null) {
+          final newCount = updatedDhikr.currentCount ?? 0;
+
           setState(() {
             _currentDhikr = updatedDhikr;
-            _counter = updatedDhikr.currentCount ?? 0;
+            _counter = newCount;
           });
 
-          // Removed automatic switching - now only manual via button
-          if ((updatedDhikr.currentCount ?? 0) >= updatedDhikr.times) {
+          // Show completion message only when transitioning from incomplete to complete
+          // i.e., when previousCount < times and newCount >= times
+          if (previousCount < updatedDhikr.times &&
+              newCount >= updatedDhikr.times) {
             if (mounted) {
               AppSnackbar.showSuccess(
                 context,
