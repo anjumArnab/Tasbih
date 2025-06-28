@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 
 class AnimatedCircleButton extends StatelessWidget {
@@ -6,10 +8,6 @@ class AnimatedCircleButton extends StatelessWidget {
   final IconData icon;
   final double size;
   final double iconSize;
-  final double borderWidth;
-  final Color borderColor;
-  final Color iconColor;
-  final Color backgroundColor;
 
   const AnimatedCircleButton({
     super.key,
@@ -18,11 +16,12 @@ class AnimatedCircleButton extends StatelessWidget {
     required this.icon,
     this.size = 80.0,
     this.iconSize = 30.0,
-    this.borderWidth = 3.0,
-    this.borderColor = Colors.black87,
-    this.iconColor = Colors.black87,
-    this.backgroundColor = Colors.transparent,
   });
+
+  static const Color primaryColor = Color(0xFF0F4C75);
+  static const Color secondaryColor = Color(0xFF3282B8);
+  static const Color accentColor = Color(0xFF00A8CC);
+  static const Color backgroundColor = Color(0xFFF8FBFF);
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +36,21 @@ class AnimatedCircleButton extends StatelessWidget {
               width: size,
               height: size,
               decoration: BoxDecoration(
-                color: backgroundColor,
+                gradient: const LinearGradient(
+                  colors: [accentColor, secondaryColor],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
-                border: Border.all(color: borderColor, width: borderWidth),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: iconColor, size: iconSize),
+              child: Icon(icon, color: Colors.white, size: iconSize),
             ),
           ),
         );
