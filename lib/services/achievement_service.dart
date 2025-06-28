@@ -2,23 +2,19 @@ import 'package:hive/hive.dart';
 import '../models/achievement.dart';
 import '../models/dhikr.dart';
 import '../data/init_achievement_data.dart';
+import '../services/db_service.dart';
 
 class AchievementService {
   static const String _achievementBoxName = 'achievements';
   static const String _userStatsBoxName = 'user_stats';
-  static const String _dhikrHistoryBoxName = 'dhikr_history';
 
   late Box<Achievement> _achievementBox;
   late Box<Map<dynamic, dynamic>> _userStatsBox;
-  late Box<Map<dynamic, dynamic>> _dhikrHistoryBox;
 
   Future<void> init() async {
     _achievementBox = await Hive.openBox<Achievement>(_achievementBoxName);
     _userStatsBox = await Hive.openBox<Map<dynamic, dynamic>>(
       _userStatsBoxName,
-    );
-    _dhikrHistoryBox = await Hive.openBox<Map<dynamic, dynamic>>(
-      _dhikrHistoryBoxName,
     );
 
     // Initialize achievements if empty
@@ -116,18 +112,65 @@ class AchievementService {
     await _userStatsBox.put('user_stats', userStats);
 
     // Check achievements
+    await _checkAndUnlockAchievements(userStats, newlyUnlockedAchievements);
+
+    return newlyUnlockedAchievements;
+  }
+
+  // Enhanced method to check achievements based on actual dhikr data
+  Future<void> _checkAndUnlockAchievements(
+    Map<dynamic, dynamic> userStats,
+    List<Achievement> newlyUnlockedAchievements,
+  ) async {
     final achievements = _achievementBox.values.toList();
+
+    // Get current dhikr counts from the actual dhikr database
+    final allDhikr = DbService.getAllDhikr();
+    final actualDhikrCounts = _calculateActualDhikrCounts(allDhikr);
 
     for (var achievement in achievements) {
       if (!achievement.isUnlocked) {
-        if (await _checkAchievementUnlocked(achievement, userStats)) {
-          final unlockedAchievement = achievement.copyWith(
-            isUnlocked: true,
-            unlockedAt: DateTime.now(),
-          );
+        bool shouldUnlock = false;
+        int currentProgress = 0;
 
-          await _achievementBox.put(achievement.id, unlockedAchievement);
-          newlyUnlockedAchievements.add(unlockedAchievement);
+        switch (achievement.type) {
+          case AchievementType.count:
+            final result = _checkCountAchievement(
+              achievement,
+              actualDhikrCounts,
+              userStats,
+            );
+            shouldUnlock = result['shouldUnlock'];
+            currentProgress = result['currentProgress'];
+            break;
+          case AchievementType.streak:
+            final result = _checkStreakAchievement(achievement, userStats);
+            shouldUnlock = result['shouldUnlock'];
+            currentProgress = result['currentProgress'];
+            break;
+          case AchievementType.time:
+            final result = _checkTimeAchievement(achievement, userStats);
+            shouldUnlock = result['shouldUnlock'];
+            currentProgress = result['currentProgress'];
+            break;
+          case AchievementType.special:
+            final result = _checkSpecialAchievement(achievement, userStats);
+            shouldUnlock = result['shouldUnlock'];
+            currentProgress = result['currentProgress'];
+            break;
+        }
+
+        // Update achievement progress
+        final updatedAchievement = achievement.copyWith(
+          currentProgress: currentProgress,
+          isUnlocked: shouldUnlock,
+          unlockedAt: shouldUnlock ? DateTime.now() : null,
+        );
+
+        await _achievementBox.put(achievement.id, updatedAchievement);
+
+        if (shouldUnlock && !achievement.isUnlocked) {
+          newlyUnlockedAchievements.add(updatedAchievement);
 
           // Add points
           userStats['total_points'] =
@@ -139,37 +182,50 @@ class AchievementService {
 
     // Check master achievement
     await _checkMasterAchievement(newlyUnlockedAchievements);
-
-    return newlyUnlockedAchievements;
   }
 
-  Future<bool> _checkAchievementUnlocked(
-    Achievement achievement,
-    Map<dynamic, dynamic> userStats,
-  ) async {
-    switch (achievement.type) {
-      case AchievementType.count:
-        return _checkCountAchievement(achievement, userStats);
-      case AchievementType.streak:
-        return _checkStreakAchievement(achievement, userStats);
-      case AchievementType.special:
-        return _checkSpecialAchievement(achievement, userStats);
-      default:
-        return false;
+  // Calculate actual dhikr counts from the dhikr database
+  Map<String, int> _calculateActualDhikrCounts(List<Dhikr> allDhikr) {
+    final counts = <String, int>{
+      'SubhanAllah': 0,
+      'Alhamdulillah': 0,
+      'Allahu Akbar': 0,
+      'Astaghfirullah': 0,
+      'La ilaha illa Allah': 0,
+      'Salawat': 0,
+      'Dua': 0,
+      'Adhkar': 0,
+    };
+
+    int totalCount = 0;
+
+    for (final dhikr in allDhikr) {
+      final currentCount = dhikr.currentCount ?? 0;
+      totalCount += currentCount;
+
+      final dhikrKey = _mapDhikrTitle(dhikr.dhikrTitle);
+      if (counts.containsKey(dhikrKey)) {
+        counts[dhikrKey] = counts[dhikrKey]! + currentCount;
+      }
     }
+
+    counts['All'] = totalCount;
+    return counts;
   }
 
-  bool _checkCountAchievement(
+  Map<String, dynamic> _checkCountAchievement(
     Achievement achievement,
+    Map<String, int> actualDhikrCounts,
     Map<dynamic, dynamic> userStats,
   ) {
-    final dhikrCounts = Map<String, dynamic>.from(
-      userStats['dhikr_counts'] ?? {},
-    );
+    int currentProgress = 0;
+    bool shouldUnlock = false;
 
     switch (achievement.dhikrType) {
       case 'All':
-        return (userStats['total_dhikr_count'] ?? 0) >= achievement.targetCount;
+        currentProgress = actualDhikrCounts['All'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'SubhanAllah':
       case 'Alhamdulillah':
       case 'Allahu Akbar':
@@ -178,26 +234,95 @@ class AchievementService {
       case 'Salawat':
       case 'Dua':
       case 'Adhkar':
-        return (dhikrCounts[achievement.dhikrType] ?? 0) >=
-            achievement.targetCount;
+        currentProgress = actualDhikrCounts[achievement.dhikrType] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'Balanced':
         // For perfect balance achievement
-        return (dhikrCounts['SubhanAllah'] ?? 0) >= 100 &&
-            (dhikrCounts['Alhamdulillah'] ?? 0) >= 100 &&
-            (dhikrCounts['Allahu Akbar'] ?? 0) >= 100;
-      default:
-        return false;
+        final subhanCount = actualDhikrCounts['SubhanAllah'] ?? 0;
+        final alhamdCount = actualDhikrCounts['Alhamdulillah'] ?? 0;
+        final akbarCount = actualDhikrCounts['Allahu Akbar'] ?? 0;
+
+        currentProgress = [
+          subhanCount,
+          alhamdCount,
+          akbarCount,
+        ].reduce((a, b) => a < b ? a : b);
+        shouldUnlock =
+            subhanCount >= achievement.targetCount &&
+            alhamdCount >= achievement.targetCount &&
+            akbarCount >= achievement.targetCount;
+        break;
     }
+
+    return {'shouldUnlock': shouldUnlock, 'currentProgress': currentProgress};
   }
 
-  bool _checkStreakAchievement(
+  Map<String, dynamic> _checkTimeAchievement(
     Achievement achievement,
     Map<dynamic, dynamic> userStats,
   ) {
-    return (userStats['current_streak'] ?? 0) >= achievement.targetCount;
+    // Time-based achievements could be based on:
+    // - Total time spent in dhikr
+    // - Consecutive days of dhikr
+    // - Dhikr at specific times (Fajr, Maghrib, etc.)
+
+    int currentProgress = 0;
+    bool shouldUnlock = false;
+
+    switch (achievement.id) {
+      case 'fajr_time':
+        // Check if dhikr was done during Fajr time
+        final specialStats = Map<String, dynamic>.from(
+          userStats['special_achievements'] ?? {},
+        );
+        final fajrDates = List<String>.from(
+          specialStats['fajr_dhikr_dates'] ?? [],
+        );
+        currentProgress = fajrDates.length;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
+      case 'maghrib_time':
+        // Check if dhikr was done during Maghrib time
+        final specialStats = Map<String, dynamic>.from(
+          userStats['special_achievements'] ?? {},
+        );
+        final maghribDates = List<String>.from(
+          specialStats['maghrib_dhikr_dates'] ?? [],
+        );
+        currentProgress = maghribDates.length;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
+      case 'early_morning':
+      case 'late_night':
+        // These would need specific time checking logic
+        // For now, fallback to total count
+        currentProgress = userStats['total_dhikr_count'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
+      default:
+        // Default time-based achievement logic
+        // Could be based on consecutive days or specific timing
+        final currentStreak = userStats['current_streak'] ?? 0;
+        currentProgress = currentStreak;
+        shouldUnlock = currentStreak >= achievement.targetCount;
+    }
+
+    return {'shouldUnlock': shouldUnlock, 'currentProgress': currentProgress};
   }
 
-  bool _checkSpecialAchievement(
+  Map<String, dynamic> _checkStreakAchievement(
+    Achievement achievement,
+    Map<dynamic, dynamic> userStats,
+  ) {
+    final currentStreak = userStats['current_streak'] ?? 0;
+    return {
+      'shouldUnlock': currentStreak >= achievement.targetCount,
+      'currentProgress': currentStreak,
+    };
+  }
+
+  Map<String, dynamic> _checkSpecialAchievement(
     Achievement achievement,
     Map<dynamic, dynamic> userStats,
   ) {
@@ -205,26 +330,50 @@ class AchievementService {
       userStats['special_achievements'] ?? {},
     );
 
+    int currentProgress = 0;
+    bool shouldUnlock = false;
+
     switch (achievement.id) {
       case 'fajr_dhikr':
+        final fajrDates = List<String>.from(
+          specialStats['fajr_dhikr_dates'] ?? [],
+        );
+        currentProgress = fajrDates.length;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'maghrib_dhikr':
-      case 'tahajjud_warrior':
-        // These would need time-based checking - simplified for now
-        return (userStats['total_dhikr_count'] ?? 0) >= achievement.targetCount;
+        final maghribDates = List<String>.from(
+          specialStats['maghrib_dhikr_dates'] ?? [],
+        );
+        currentProgress = maghribDates.length;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'friday_blessing':
         final fridayWeeks = List<String>.from(
           specialStats['friday_dhikr_weeks'] ?? [],
         );
-        return fridayWeeks.length >= achievement.targetCount;
+        currentProgress = fridayWeeks.length;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'morning_evening':
-        return (specialStats['morning_evening_streak'] ?? 0) >=
-            achievement.targetCount;
+        currentProgress = specialStats['morning_evening_streak'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       case 'ramadan_dedication':
-        return (specialStats['ramadan_dhikr_count'] ?? 0) >=
-            achievement.targetCount;
+        currentProgress = specialStats['ramadan_dhikr_count'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
+      case 'tahajjud_warrior':
+        currentProgress = specialStats['tahajjud_dhikr_count'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
+        break;
       default:
-        return (userStats['total_dhikr_count'] ?? 0) >= achievement.targetCount;
+        // Fallback to total dhikr count
+        currentProgress = userStats['total_dhikr_count'] ?? 0;
+        shouldUnlock = currentProgress >= achievement.targetCount;
     }
+
+    return {'shouldUnlock': shouldUnlock, 'currentProgress': currentProgress};
   }
 
   Future<void> _checkMasterAchievement(List<Achievement> newlyUnlocked) async {
@@ -265,9 +414,32 @@ class AchievementService {
         return 'Astaghfirullah';
       case 'la ilaha illa allah':
         return 'La ilaha illa Allah';
+      case 'salawat':
+        return 'Salawat';
+      case 'dua':
+        return 'Dua';
+      case 'adhkar':
+        return 'Adhkar';
       default:
         return dhikrTitle;
     }
+  }
+
+  // Method to be called whenever dhikr count is updated in the main app
+  Future<List<Achievement>> onDhikrCountUpdated(int dhikrId) async {
+    final dhikr = DbService.getDhikrById(dhikrId);
+    if (dhikr != null) {
+      return await updateDhikrCount(dhikr, 1);
+    }
+    return [];
+  }
+
+  // Method to recalculate all achievements based on current dhikr data
+  Future<void> recalculateAchievements() async {
+    final userStats = _userStatsBox.get('user_stats') ?? {};
+    final newlyUnlockedAchievements = <Achievement>[];
+
+    await _checkAndUnlockAchievements(userStats, newlyUnlockedAchievements);
   }
 
   // Getter methods
@@ -359,6 +531,5 @@ class AchievementService {
   Future<void> dispose() async {
     await _achievementBox.close();
     await _userStatsBox.close();
-    await _dhikrHistoryBox.close();
   }
 }
