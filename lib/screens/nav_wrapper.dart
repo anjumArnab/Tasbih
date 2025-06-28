@@ -1,6 +1,8 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import '../models/dhikr.dart';
-import '../screens/dhikr_achievement_page.dart';
+import 'dhikr_stats_page.dart';
 import '../screens/homepage.dart';
 import '../screens/dhikrpage.dart';
 
@@ -62,7 +64,7 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
         children: [
           Homepage(selectedDhikr: widget.selectedDhikr),
           const Dhikrpage(),
-          const DhikrAchievementsPage(),
+          const DhikrStatsPage(),
         ],
       ),
       bottomNavigationBar: Container(
