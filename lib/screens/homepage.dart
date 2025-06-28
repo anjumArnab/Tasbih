@@ -156,10 +156,14 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             _counter = updatedDhikr.currentCount ?? 0;
           });
 
+          // Removed automatic switching - now only manual via button
           if ((updatedDhikr.currentCount ?? 0) >= updatedDhikr.times) {
-            Future.delayed(const Duration(milliseconds: 500), () {
-              _loadNextIncompleteDhikr();
-            });
+            if (mounted) {
+              AppSnackbar.showSuccess(
+                context,
+                '${updatedDhikr.dhikrTitle} completed! Tap "Next Dhikr" to continue.',
+              );
+            }
           }
         }
       } catch (e) {
@@ -314,6 +318,56 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                             icon: Icons.keyboard_arrow_down,
                             size: 50,
                             iconSize: 25,
+                          ),
+                          const SizedBox(height: 30),
+                          // Next Dhikr Button
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [accentColor, secondaryColor],
+                              ),
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accentColor.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: _loadNextIncompleteDhikr,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(25),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(
+                                    Icons.skip_next,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Next Dhikr',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
