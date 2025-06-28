@@ -180,6 +180,119 @@ class DbService {
     }
   }
 
+  /// Get count of completed dhikr sessions for a specific date
+  static Future<int> getCompletedDhikrCountForDate(DateTime date) async {
+    try {
+      if (!isInitialized) await init();
+
+      final dhikrList = _dhikrBox.values.toList();
+
+      // Normalize the date to compare only year, month, day
+      final targetDate = DateTime(date.year, date.month, date.day);
+
+      int completedCount = 0;
+      for (final dhikr in dhikrList) {
+        final dhikrDate = DateTime(
+          dhikr.when.year,
+          dhikr.when.month,
+          dhikr.when.day,
+        );
+
+        // Check if dhikr is for the target date and is completed
+        if (dhikrDate == targetDate &&
+            dhikr.currentCount != null &&
+            dhikr.currentCount! >= dhikr.times) {
+          completedCount++;
+        }
+      }
+
+      return completedCount;
+    } catch (e) {
+      return 0; // Return 0 on error to prevent UI issues
+    }
+  }
+
+  /// Get activity level (0-4) for a specific date based on completed dhikr count
+  static Future<int> getActivityLevelForDate(DateTime date) async {
+    try {
+      final completedCount = await getCompletedDhikrCountForDate(date);
+      return _convertCountToActivityLevel(completedCount);
+    } catch (e) {
+      return 0; // Return 0 on error
+    }
+  }
+
+  /// Convert completed dhikr count to activity level (0-4)
+  static int _convertCountToActivityLevel(int completedCount) {
+    if (completedCount == 0) return 0;
+    if (completedCount == 1) return 1;
+    if (completedCount == 2) return 2;
+    if (completedCount == 3) return 3;
+    return 4; // 4 or more completed dhikr
+  }
+
+  /// Get activity data for a date range (useful for bulk loading)
+  static Future<Map<DateTime, int>> getActivityDataForDateRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    try {
+      if (!isInitialized) await init();
+
+      final Map<DateTime, int> activityData = {};
+      final dhikrList = _dhikrBox.values.toList();
+
+      // Initialize all dates with 0 activity
+      DateTime currentDate = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+      );
+      final normalizedEndDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day,
+      );
+
+      while (currentDate.isBefore(normalizedEndDate) ||
+          currentDate.isAtSameMomentAs(normalizedEndDate)) {
+        activityData[DateTime(
+              currentDate.year,
+              currentDate.month,
+              currentDate.day,
+            )] =
+            0;
+        currentDate = currentDate.add(const Duration(days: 1));
+      }
+
+      // Count completed dhikr for each date
+      for (final dhikr in dhikrList) {
+        final dhikrDate = DateTime(
+          dhikr.when.year,
+          dhikr.when.month,
+          dhikr.when.day,
+        );
+
+        // Check if dhikr date is within our range and is completed
+        if (activityData.containsKey(dhikrDate) &&
+            dhikr.currentCount != null &&
+            dhikr.currentCount! >= dhikr.times) {
+          activityData[dhikrDate] = activityData[dhikrDate]! + 1;
+        }
+      }
+
+      // Convert counts to activity levels
+      final Map<DateTime, int> activityLevels = {};
+      activityData.forEach((date, count) {
+        activityLevels[date] = _convertCountToActivityLevel(count);
+      });
+
+      return activityLevels;
+    } catch (e) {
+      return {}; // Return empty map on error
+    }
+  }
+
   // Update - Update dhikr
   static Future<void> updateDhikr(Dhikr updatedDhikr) async {
     try {
