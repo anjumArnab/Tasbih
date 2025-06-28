@@ -9,7 +9,7 @@ class InitAchievementData {
         title: 'First Steps',
         description: 'Complete SubhanAllah 100 times',
         category: AchievementCategory.tasbeh,
-        targetCount: 100,
+        targetCount: 33,
         dhikrType: 'SubhanAllah',
         type: AchievementType.count,
         points: 10,
