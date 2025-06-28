@@ -61,7 +61,14 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
   Future<void> _loadFirstIncompleteDhikr() async {
     try {
-      await DbService.init();
+      // Remove the redundant init() call - it should be called once in main()
+      // await DbService.init();
+
+      // Ensure database is initialized before proceeding
+      if (!DbService.isInitialized) {
+        await DbService.init();
+      }
+
       final allDhikrs = DbService.getAllDhikr();
 
       if (allDhikrs.isNotEmpty) {
@@ -76,10 +83,12 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
-      AppSnackbar.showError(
-        context,
-        'Failed to load first incomplete dhikr: $e',
-      );
+      if (mounted) {
+        AppSnackbar.showError(
+          context,
+          'Failed to load first incomplete dhikr: $e',
+        );
+      }
     }
   }
 
@@ -131,10 +140,12 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         }
       }
     } catch (e) {
-      AppSnackbar.showError(
-        context,
-        'Failed to load next incomplete dhikr: $e',
-      );
+      if (mounted) {
+        AppSnackbar.showError(
+          context,
+          'Failed to load next incomplete dhikr: $e',
+        );
+      }
     }
   }
 
@@ -174,7 +185,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           }
         }
       } catch (e) {
-        AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
+        if (mounted) {
+          AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
+        }
         return;
       }
     } else {
@@ -200,7 +213,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           });
         }
       } catch (e) {
-        AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
+        if (mounted) {
+          AppSnackbar.showError(context, 'Failed to update dhikr count: $e');
+        }
         return;
       }
     } else {
@@ -226,7 +241,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           });
         }
       } catch (e) {
-        AppSnackbar.showError(context, 'Failed to reset dhikr count: $e');
+        if (mounted) {
+          AppSnackbar.showError(context, 'Failed to reset dhikr count: $e');
+        }
         return;
       }
     } else {

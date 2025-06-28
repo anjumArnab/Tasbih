@@ -6,25 +6,49 @@ class DbService {
   static const String _boxName = 'dhikr_box';
   static const String _isInitializedKey = 'is_initialized';
   static Box<Dhikr>? _box;
+  static bool _isInitialized = false; // Add this flag
 
   // Initialize Hive and open the box
   static Future<void> init() async {
-    // Register the adapter if not already registered
-    if (!Hive.isAdapterRegistered(0)) {
-      Hive.registerAdapter(DhikrAdapter());
+    // Prevent multiple initializations
+    if (_isInitialized && _box != null && _box!.isOpen) {
+      return;
     }
 
-    _box = await Hive.openBox<Dhikr>(_boxName);
+    try {
+      // Register the adapter if not already registered
+      if (!Hive.isAdapterRegistered(0)) {
+        Hive.registerAdapter(DhikrAdapter());
+      }
 
-    // Add initial data if this is the first time opening the app
-    await _addInitialDataIfNeeded();
+      // Only open box if it's not already open
+      if (_box == null || !_box!.isOpen) {
+        _box = await Hive.openBox<Dhikr>(_boxName);
+      }
+
+      // Add initial data if this is the first time opening the app
+      await _addInitialDataIfNeeded();
+
+      _isInitialized = true;
+    } catch (e) {
+      throw Exception('Failed to initialize database: $e');
+    }
   }
 
   // Add initial data if the database hasn't been initialized before
   static Future<void> _addInitialDataIfNeeded() async {
     try {
       // Check if we've already added initial data
-      final preferences = await Hive.openBox('app_preferences');
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
       final isInitialized = preferences.get(
         _isInitializedKey,
         defaultValue: false,
@@ -44,9 +68,6 @@ class DbService {
 
         // Mark as initialized so we don't add initial data again
         await preferences.put(_isInitializedKey, true);
-        await preferences.close();
-      } else {
-        await preferences.close();
       }
     } catch (e) {
       throw Exception('Failed to add initial data: $e');
@@ -61,9 +82,15 @@ class DbService {
     return _box!;
   }
 
+  // Check if database is initialized
+  static bool get isInitialized =>
+      _isInitialized && _box != null && _box!.isOpen;
+
   // Create - Add a new dhikr
   static Future<int> addDhikr(Dhikr dhikr) async {
     try {
+      if (!isInitialized) await init();
+
       // Generate a new ID to avoid conflicts
       final existingIds = _dhikrBox.values.map((d) => d.id ?? 0).toList();
       int newId = 0;
@@ -90,6 +117,11 @@ class DbService {
   // Read - Get all dhikr
   static List<Dhikr> getAllDhikr() {
     try {
+      if (!isInitialized) {
+        throw Exception(
+          'Database not initialized. Call DbService.init() first.',
+        );
+      }
       return _dhikrBox.values.toList();
     } catch (e) {
       throw Exception('Failed to get dhikr list: $e');
@@ -99,6 +131,7 @@ class DbService {
   // Read - Get dhikr by ID
   static Dhikr? getDhikrById(int id) {
     try {
+      if (!isInitialized) return null;
       return _dhikrBox.values.firstWhere(
         (dhikr) => dhikr.id == id,
         orElse: () => throw Exception('Dhikr not found'),
@@ -111,6 +144,11 @@ class DbService {
   // Read - Get upcoming dhikr
   static List<Dhikr> getUpcomingDhikr() {
     try {
+      if (!isInitialized) {
+        throw Exception(
+          'Database not initialized. Call DbService.init() first.',
+        );
+      }
       final now = DateTime.now();
       return _dhikrBox.values
           .where(
@@ -128,6 +166,11 @@ class DbService {
   // Read - Get completed dhikr
   static List<Dhikr> getCompletedDhikr() {
     try {
+      if (!isInitialized) {
+        throw Exception(
+          'Database not initialized. Call DbService.init() first.',
+        );
+      }
       return _dhikrBox.values
           .where((dhikr) => (dhikr.currentCount ?? 0) >= dhikr.times)
           .toList()
@@ -140,6 +183,8 @@ class DbService {
   // Update - Update dhikr
   static Future<void> updateDhikr(Dhikr updatedDhikr) async {
     try {
+      if (!isInitialized) await init();
+
       // Find the index of the dhikr to update
       final index = _dhikrBox.values.toList().indexWhere(
         (dhikr) => dhikr.id == updatedDhikr.id,
@@ -158,6 +203,8 @@ class DbService {
   // Update - Increment dhikr count
   static Future<void> incrementDhikrCount(int dhikrId) async {
     try {
+      if (!isInitialized) await init();
+
       final dhikr = getDhikrById(dhikrId);
       if (dhikr != null) {
         final updatedDhikr = Dhikr(
@@ -188,6 +235,8 @@ class DbService {
   // Update - Decrement dhikr count
   static Future<void> decrementDhikrCount(int dhikrId) async {
     try {
+      if (!isInitialized) await init();
+
       final dhikr = getDhikrById(dhikrId);
       if (dhikr != null) {
         final currentCount = dhikr.currentCount ?? 0;
@@ -222,6 +271,8 @@ class DbService {
   // Update - Reset dhikr count to 0
   static Future<void> resetDhikrCount(int dhikrId) async {
     try {
+      if (!isInitialized) await init();
+
       final dhikr = getDhikrById(dhikrId);
       if (dhikr != null) {
         final updatedDhikr = Dhikr(
@@ -252,6 +303,8 @@ class DbService {
   // Delete - Delete dhikr by ID
   static Future<void> deleteDhikr(int dhikrId) async {
     try {
+      if (!isInitialized) await init();
+
       final index = _dhikrBox.values.toList().indexWhere(
         (dhikr) => dhikr.id == dhikrId,
       );
@@ -269,6 +322,7 @@ class DbService {
   // Delete - Clear all dhikr
   static Future<void> clearAllDhikr() async {
     try {
+      if (!isInitialized) await init();
       await _dhikrBox.clear();
     } catch (e) {
       throw Exception('Failed to clear all dhikr: $e');
@@ -278,6 +332,7 @@ class DbService {
   // Utility - Get dhikr count
   static int getDhikrCount() {
     try {
+      if (!isInitialized) return 0;
       return _dhikrBox.length;
     } catch (e) {
       return 0;
@@ -286,6 +341,21 @@ class DbService {
 
   // Listen to changes in the database
   static Stream<BoxEvent> watchDhikr() {
+    if (!isInitialized) {
+      throw Exception('Database not initialized. Call DbService.init() first.');
+    }
     return _dhikrBox.watch();
+  }
+
+  // Close the database (call this when app is disposed)
+  static Future<void> close() async {
+    try {
+      if (_box != null && _box!.isOpen) {
+        await _box!.close();
+      }
+      _isInitialized = false;
+    } catch (e) {
+      // Ignore close errors
+    }
   }
 }
