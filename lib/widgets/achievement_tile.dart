@@ -112,16 +112,6 @@ class AchievementTile extends StatelessWidget {
               ],
             ),
           ),
-
-          // Status Indicator
-          const SizedBox(width: 8),
-          Icon(
-            achievement.isUnlocked
-                ? Icons.check_circle
-                : Icons.radio_button_unchecked,
-            color: achievement.isUnlocked ? accentColor : Colors.grey[400],
-            size: 20,
-          ),
         ],
       ),
     );
