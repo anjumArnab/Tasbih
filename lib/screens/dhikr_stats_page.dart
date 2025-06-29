@@ -632,15 +632,15 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
   String _getCategoryDisplayName(AchievementCategory category) {
     switch (category) {
       case AchievementCategory.tasbeh:
-        return 'Tasbeh Achievements';
+        return 'Tasbih';
       case AchievementCategory.consistency:
-        return 'Consistency Achievements';
+        return 'Consistency';
       case AchievementCategory.milestone:
-        return 'Milestone Achievements';
+        return 'Milestone';
       case AchievementCategory.special:
-        return 'Special Achievements';
+        return 'Special';
       case AchievementCategory.spiritual:
-        return 'Spiritual Achievements';
+        return 'Spiritual';
     }
   }
 
