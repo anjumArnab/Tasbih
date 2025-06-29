@@ -258,7 +258,8 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor:
+          backgroundColor, // Changed back to backgroundColor (light blue)
       appBar: AppBar(
         title: const Text(
           'Tasbih',
@@ -300,13 +301,8 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
             if (_currentDhikr != null) DhikrTile(dhikr: _currentDhikr!),
             Expanded(
               child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [backgroundColor, Colors.white],
-                  ),
-                ),
+                color:
+                    backgroundColor, // Changed to backgroundColor to match Scaffold
                 child: Padding(
                   padding: const EdgeInsets.only(top: 20),
                   child: Column(
@@ -315,10 +311,11 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                     children: [
                       Text(
                         '$_counter',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 60,
                           fontWeight: FontWeight.w300,
-                          color: primaryColor,
+                          color:
+                              primaryColor, // Changed to primaryColor for better contrast on light background
                           height: 1,
                         ),
                         textAlign: TextAlign.center,
@@ -372,9 +369,9 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                                   borderRadius: BorderRadius.circular(25),
                                 ),
                               ),
-                              child: Row(
+                              child: const Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: const [
+                                children: [
                                   Icon(
                                     Icons.skip_next,
                                     color: Colors.white,
