@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../screens/nav_wrapper.dart';
-import '../models/dhikr.dart';
+import 'models/dhikr.dart';
 import '../models/achievement.dart';
 import '../services/db_service.dart';
 import '../services/achievement_service.dart';

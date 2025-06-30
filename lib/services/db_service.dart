@@ -5,8 +5,9 @@ import '../data/init_dhikr_data.dart';
 class DbService {
   static const String _boxName = 'dhikr_box';
   static const String _isInitializedKey = 'is_initialized';
+  static const String _lastResetDateKey = 'last_reset_date';
   static Box<Dhikr>? _box;
-  static bool _isInitialized = false; // Add this flag
+  static bool _isInitialized = false;
 
   // Initialize Hive and open the box
   static Future<void> init() async {
@@ -29,9 +30,123 @@ class DbService {
       // Add initial data if this is the first time opening the app
       await _addInitialDataIfNeeded();
 
+      // Check and reset counters if it's a new day
+      await _checkAndResetDailyCounters();
+
       _isInitialized = true;
     } catch (e) {
       throw Exception('Failed to initialize database: $e');
+    }
+  }
+
+  // Check if it's a new day and reset all dhikr counters
+  static Future<void> _checkAndResetDailyCounters() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      final today = DateTime.now();
+      final todayString = '${today.year}-${today.month}-${today.day}';
+
+      final lastResetDate = preferences.get(
+        _lastResetDateKey,
+        defaultValue: '',
+      );
+
+      // If it's a new day, reset all counters
+      if (lastResetDate != todayString) {
+        await _resetAllDhikrCounters();
+        await preferences.put(_lastResetDateKey, todayString);
+        print('Daily dhikr counters reset for date: $todayString');
+      }
+    } catch (e) {
+      print('Error checking daily reset: $e');
+      // Don't throw here to prevent app initialization failure
+    }
+  }
+
+  // Reset all dhikr counters to 0
+  static Future<void> _resetAllDhikrCounters() async {
+    try {
+      final allDhikr = _dhikrBox.values.toList();
+
+      for (int i = 0; i < allDhikr.length; i++) {
+        final dhikr = allDhikr[i];
+        final resetDhikr = Dhikr(
+          id: dhikr.id,
+          dhikrTitle: dhikr.dhikrTitle,
+          dhikr: dhikr.dhikr,
+          times: dhikr.times,
+          when: dhikr.when,
+          currentCount: 0,
+        );
+        await _dhikrBox.putAt(i, resetDhikr);
+      }
+    } catch (e) {
+      throw Exception('Failed to reset daily counters: $e');
+    }
+  }
+
+  // Manual method to reset all counters (can be called from UI if needed)
+  static Future<void> resetAllCountersManually() async {
+    try {
+      if (!isInitialized) await init();
+      await _resetAllDhikrCounters();
+
+      // Update the last reset date to today
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      final today = DateTime.now();
+      final todayString = '${today.year}-${today.month}-${today.day}';
+      await preferences.put(_lastResetDateKey, todayString);
+    } catch (e) {
+      throw Exception('Failed to manually reset counters: $e');
+    }
+  }
+
+  // Get the last reset date (for debugging or UI display)
+  static Future<String> getLastResetDate() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      return preferences.get(_lastResetDateKey, defaultValue: 'Never');
+    } catch (e) {
+      return 'Error';
+    }
+  }
+
+  // Check if counters were reset today
+  static Future<bool> wereCountersResetToday() async {
+    try {
+      final today = DateTime.now();
+      final todayString = '${today.year}-${today.month}-${today.day}';
+      final lastResetDate = await getLastResetDate();
+      return lastResetDate == todayString;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -141,7 +256,7 @@ class DbService {
     }
   }
 
-  // Read - Get upcoming dhikr
+  // Read - Get upcoming dhikr (only for dhikr with scheduled times)
   static List<Dhikr> getUpcomingDhikr() {
     try {
       if (!isInitialized) {
@@ -153,11 +268,12 @@ class DbService {
       return _dhikrBox.values
           .where(
             (dhikr) =>
-                dhikr.when.isAfter(now) &&
+                dhikr.when != null && // Check if when is not null
+                dhikr.when!.isAfter(now) &&
                 (dhikr.currentCount ?? 0) < dhikr.times,
           )
           .toList()
-        ..sort((a, b) => a.when.compareTo(b.when));
+        ..sort((a, b) => a.when!.compareTo(b.when!));
     } catch (e) {
       throw Exception('Failed to get upcoming dhikr: $e');
     }
@@ -174,7 +290,13 @@ class DbService {
       return _dhikrBox.values
           .where((dhikr) => (dhikr.currentCount ?? 0) >= dhikr.times)
           .toList()
-        ..sort((a, b) => b.when.compareTo(a.when));
+        ..sort((a, b) {
+          // Handle null dates in sorting
+          if (a.when == null && b.when == null) return 0;
+          if (a.when == null) return 1;
+          if (b.when == null) return -1;
+          return b.when!.compareTo(a.when!);
+        });
     } catch (e) {
       throw Exception('Failed to get completed dhikr: $e');
     }
@@ -192,10 +314,13 @@ class DbService {
 
       int completedCount = 0;
       for (final dhikr in dhikrList) {
+        // Skip dhikr without scheduled time
+        if (dhikr.when == null) continue;
+
         final dhikrDate = DateTime(
-          dhikr.when.year,
-          dhikr.when.month,
-          dhikr.when.day,
+          dhikr.when!.year,
+          dhikr.when!.month,
+          dhikr.when!.day,
         );
 
         // Check if dhikr is for the target date and is completed
@@ -267,10 +392,13 @@ class DbService {
 
       // Count completed dhikr for each date
       for (final dhikr in dhikrList) {
+        // Skip dhikr without scheduled time
+        if (dhikr.when == null) continue;
+
         final dhikrDate = DateTime(
-          dhikr.when.year,
-          dhikr.when.month,
-          dhikr.when.day,
+          dhikr.when!.year,
+          dhikr.when!.month,
+          dhikr.when!.day,
         );
 
         // Check if dhikr date is within our range and is completed

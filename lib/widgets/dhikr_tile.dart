@@ -98,16 +98,22 @@ class DhikrTile extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDateTime(dhikr.when),
-                          style: TextStyle(
-                            fontSize: 12,
+                        if (dhikr.when != null) ...[
+                          const SizedBox(width: 16),
+                          Icon(
+                            Icons.schedule,
+                            size: 16,
                             color: Colors.grey[600],
                           ),
-                        ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatDateTime(dhikr.when!),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

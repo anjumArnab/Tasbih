@@ -51,11 +51,17 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
       // Initialize database
       await DbService.init();
 
+      // Initialize achievements first
+      await _initializeAchievements();
+
+      // Check and update streak status before loading data
+      await _achievementService.checkAndUpdateStreakStatus();
+
       // Load activity data
       await _loadActivityData();
 
-      // Initialize achievements
-      await _initializeAchievements();
+      // Reload achievement data after streak check
+      await _loadAchievementData();
     } catch (e) {
       print('Error initializing data: $e');
       setState(() {
@@ -646,7 +652,11 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
 
   Widget _buildActivityGridSection() {
     return RefreshIndicator(
-      onRefresh: _refreshData,
+      onRefresh: () async {
+        // Check streak status before refreshing data
+        await _achievementService.checkAndUpdateStreakStatus();
+        await _refreshData();
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -681,14 +691,15 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
                   children: [
                     _buildCompactStreakInfo(
                       label: 'Current',
+                      // Use the enhanced getCurrentStreak method
                       value: '${_achievementService.getCurrentStreak()}',
-                      color: const Color(0xFF4CAF50),
+                      color: const Color(0xFF0F4C75),
                     ),
                     const SizedBox(width: 15),
                     _buildCompactStreakInfo(
                       label: 'Best',
                       value: '${_userStats['longest_streak'] ?? 0}',
-                      color: const Color(0xFFFF9800),
+                      color: const Color(0xFF00A8CC),
                     ),
                   ],
                 ),
@@ -696,7 +707,7 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
             ),
             const SizedBox(height: 20),
 
-            // Activity grid with horizontal scroll
+            // Rest of your activity grid code...
             SizedBox(
               height: 140,
               child: PageView(
@@ -721,6 +732,7 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     );
   }
 
+  // Updated _buildCompactStreakInfo to ensure real-time streak values
   Widget _buildCompactStreakInfo({
     required String label,
     required String value,

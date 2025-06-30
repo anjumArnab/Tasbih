@@ -17,7 +17,7 @@ class Dhikr {
   final int times;
 
   @HiveField(4)
-  final DateTime when;
+  final DateTime? when;
 
   @HiveField(5)
   int? currentCount;
@@ -27,7 +27,7 @@ class Dhikr {
     required this.dhikrTitle,
     required this.dhikr,
     required this.times,
-    required this.when,
+    this.when,
     this.currentCount = 0,
   });
 }
