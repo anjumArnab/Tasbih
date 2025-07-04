@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/achievement.dart';
 import '../models/dhikr.dart';
@@ -38,9 +39,6 @@ class AchievementService {
   Future<void> _initializeUserStats() async {
     await _userStatsBox.put('user_stats', {
       'total_dhikr_count': 0,
-      'current_streak': 0,
-      'longest_streak': 0,
-      'last_dhikr_date': null,
       'total_points': 0,
       'dhikr_counts': {
         'SubhanAllah': 0,
@@ -63,34 +61,112 @@ class AchievementService {
     });
   }
 
-  /// Check and update streak status based on current date
-  /// This should be called when the app starts or when the stats page loads
-  Future<void> checkAndUpdateStreakStatus() async {
-    final userStats = _userStatsBox.get('user_stats') ?? {};
-    final today = DateTime.now().toIso8601String().split('T')[0];
-    final lastDhikrDate = userStats['last_dhikr_date'];
+  /// Get current streak from DbService
+  Future<int> getCurrentStreak() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
 
-    if (lastDhikrDate == null) {
-      // No dhikr recorded yet, current streak should be 0
-      userStats['current_streak'] = 0;
-      await _userStatsBox.put('user_stats', userStats);
-      return;
+      return preferences.get('current_streak', defaultValue: 0);
+    } catch (e) {
+      debugPrint('Error getting current streak: $e');
+      return 0;
     }
-
-    // Parse the last dhikr date
-    final lastDate = DateTime.parse(lastDhikrDate + 'T00:00:00');
-    final todayDate = DateTime.parse(today + 'T00:00:00');
-    final daysDifference = todayDate.difference(lastDate).inDays;
-
-    if (daysDifference > 1) {
-      // User missed one or more days, reset current streak
-      userStats['current_streak'] = 0;
-      await _userStatsBox.put('user_stats', userStats);
-    }
-    // If daysDifference == 0 (today) or == 1 (yesterday), keep current streak
   }
 
-  /// Enhanced updateDhikrCount with better date handling
+  /// Get best streak from DbService
+  Future<int> getBestStreak() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      return preferences.get('best_streak', defaultValue: 0);
+    } catch (e) {
+      debugPrint('Error getting best streak: $e');
+      return 0;
+    }
+  }
+
+  /// Update streak when dhikr is completed
+  Future<void> _updateStreakOnCompletion(
+    Box preferences,
+    String todayString,
+  ) async {
+    try {
+      final currentStreak = preferences.get('current_streak', defaultValue: 0);
+      final lastStreakDate = preferences.get(
+        'last_streak_date',
+        defaultValue: '',
+      );
+      final bestStreak = preferences.get('best_streak', defaultValue: 0);
+
+      if (lastStreakDate == todayString) {
+        // Already completed today, no need to update
+        return;
+      }
+
+      int newCurrentStreak;
+
+      if (lastStreakDate.isEmpty) {
+        // First time completing dhikr
+        newCurrentStreak = 0;
+      } else {
+        // Check if yesterday was completed
+        final lastDate = DateTime.parse('${lastStreakDate}T00:00:00');
+        final todayDate = DateTime.parse('${todayString}T00:00:00');
+        final daysDifference = todayDate.difference(lastDate).inDays;
+
+        if (daysDifference == 1) {
+          // Consecutive day
+          newCurrentStreak = currentStreak + 1;
+        } else {
+          // Gap in streak, start new streak
+          newCurrentStreak = 1;
+        }
+      }
+
+      // Update current streak and last streak date
+      await preferences.put('current_streak', newCurrentStreak);
+      await preferences.put('last_streak_date', todayString);
+
+      // Update best streak if current is better
+      if (newCurrentStreak > bestStreak) {
+        await preferences.put('best_streak', newCurrentStreak);
+      }
+    } catch (e) {
+      debugPrint('Error updating streak: $e');
+    }
+  }
+
+  /// Method to check if any dhikr was completed today
+  Future<bool> _wasAnyDhikrCompletedToday() async {
+    try {
+      final today = DateTime.now();
+      final completedCount = await DbService.getCompletedDhikrCountForDate(
+        today,
+      );
+      return completedCount > 0;
+    } catch (e) {
+      debugPrint('Error checking if dhikr was completed today: $e');
+      return false;
+    }
+  }
+
+  /// Enhanced updateDhikrCount that integrates with DbService
   Future<List<Achievement>> updateDhikrCount(
     Dhikr dhikr,
     int incrementCount,
@@ -112,70 +188,38 @@ class AchievementService {
     dhikrCounts[dhikrKey] = (dhikrCounts[dhikrKey] ?? 0) + incrementCount;
     userStats['dhikr_counts'] = dhikrCounts;
 
-    // Enhanced streak calculation
+    await _userStatsBox.put('user_stats', userStats);
+
+    // Check if this completion should update the streak
     final today = DateTime.now();
-    final todayString = today.toIso8601String().split('T')[0];
-    final lastDhikrDate = userStats['last_dhikr_date'];
+    final todayString = '${today.year}-${today.month}-${today.day}';
 
-    if (lastDhikrDate == null || lastDhikrDate != todayString) {
-      // This is the first dhikr of the day
-      if (lastDhikrDate == null) {
-        // Very first dhikr ever
-        userStats['current_streak'] = 1;
-      } else {
-        // Check if this continues a streak
-        final lastDate = DateTime.parse(lastDhikrDate + 'T00:00:00');
-        final daysDifference = today.difference(lastDate).inDays;
-
-        if (daysDifference == 1) {
-          // Consecutive day - continue streak
-          userStats['current_streak'] = (userStats['current_streak'] ?? 0) + 1;
-        } else if (daysDifference > 1) {
-          // Missed day(s) - restart streak
-          userStats['current_streak'] = 1;
+    // Check if this is the first completion of the day that makes the dhikr complete
+    final isCompleted =
+        (dhikr.currentCount ?? 0) + incrementCount >= dhikr.times;
+    if (isCompleted) {
+      // Check if any dhikr was completed today before this
+      final wasCompletedBefore = await _wasAnyDhikrCompletedToday();
+      if (!wasCompletedBefore) {
+        // This is the first dhikr completion of the day, update streak
+        Box? preferences;
+        try {
+          preferences =
+              Hive.isBoxOpen('app_preferences')
+                  ? Hive.box('app_preferences')
+                  : await Hive.openBox('app_preferences');
+        } catch (e) {
+          preferences = await Hive.openBox('app_preferences');
         }
-        // If daysDifference == 0, it means multiple dhikr sessions today - keep current streak
-      }
 
-      userStats['last_dhikr_date'] = todayString;
-
-      // Update longest streak if current is higher
-      final currentStreak = userStats['current_streak'] ?? 0;
-      final longestStreak = userStats['longest_streak'] ?? 0;
-      if (currentStreak > longestStreak) {
-        userStats['longest_streak'] = currentStreak;
+        await _updateStreakOnCompletion(preferences, todayString);
       }
     }
-
-    await _userStatsBox.put('user_stats', userStats);
 
     // Check achievements
     await _checkAndUnlockAchievements(userStats, newlyUnlockedAchievements);
 
     return newlyUnlockedAchievements;
-  }
-
-  /// Get current streak with real-time validation
-  int getCurrentStreak() {
-    final userStats = getUserStats();
-    final currentStreak = userStats['current_streak'] ?? 0;
-    final lastDhikrDate = userStats['last_dhikr_date'];
-
-    if (lastDhikrDate == null) return 0;
-
-    // Check if streak should be reset due to missed days
-    final today = DateTime.now().toIso8601String().split('T')[0];
-    final lastDate = DateTime.parse(lastDhikrDate + 'T00:00:00');
-    final todayDate = DateTime.parse(today + 'T00:00:00');
-    final daysDifference = todayDate.difference(lastDate).inDays;
-
-    if (daysDifference > 1) {
-      // Streak should be reset but we don't modify data here
-      // This will be handled by checkAndUpdateStreakStatus()
-      return 0;
-    }
-
-    return currentStreak;
   }
 
   // Enhanced method to check achievements based on actual dhikr data
@@ -205,7 +249,10 @@ class AchievementService {
             currentProgress = result['currentProgress'];
             break;
           case AchievementType.streak:
-            final result = _checkStreakAchievement(achievement, userStats);
+            final result = await _checkStreakAchievement(
+              achievement,
+              userStats,
+            );
             shouldUnlock = result['shouldUnlock'];
             currentProgress = result['currentProgress'];
             break;
@@ -323,17 +370,11 @@ class AchievementService {
     Achievement achievement,
     Map<dynamic, dynamic> userStats,
   ) {
-    // Time-based achievements could be based on:
-    // - Total time spent in dhikr
-    // - Consecutive days of dhikr
-    // - Dhikr at specific times (Fajr, Maghrib, etc.)
-
     int currentProgress = 0;
     bool shouldUnlock = false;
 
     switch (achievement.id) {
       case 'fajr_time':
-        // Check if dhikr was done during Fajr time
         final specialStats = Map<String, dynamic>.from(
           userStats['special_achievements'] ?? {},
         );
@@ -344,7 +385,6 @@ class AchievementService {
         shouldUnlock = currentProgress >= achievement.targetCount;
         break;
       case 'maghrib_time':
-        // Check if dhikr was done during Maghrib time
         final specialStats = Map<String, dynamic>.from(
           userStats['special_achievements'] ?? {},
         );
@@ -356,30 +396,34 @@ class AchievementService {
         break;
       case 'early_morning':
       case 'late_night':
-        // These would need specific time checking logic
-        // For now, fallback to total count
         currentProgress = userStats['total_dhikr_count'] ?? 0;
         shouldUnlock = currentProgress >= achievement.targetCount;
         break;
       default:
-        // Default time-based achievement logic
-        // Could be based on consecutive days or specific timing
-        final currentStreak = userStats['current_streak'] ?? 0;
-        currentProgress = currentStreak;
-        shouldUnlock = currentStreak >= achievement.targetCount;
+        // For other time-based achievements, use streak data
+        // This will be handled by the streak achievements instead
+        currentProgress = 0;
+        shouldUnlock = false;
     }
 
     return {'shouldUnlock': shouldUnlock, 'currentProgress': currentProgress};
   }
 
-  Map<String, dynamic> _checkStreakAchievement(
+  Future<Map<String, dynamic>> _checkStreakAchievement(
     Achievement achievement,
     Map<dynamic, dynamic> userStats,
-  ) {
-    final currentStreak = userStats['current_streak'] ?? 0;
+  ) async {
+    // Get streak data from DbService integration
+    final currentStreak = await getCurrentStreak();
+    final bestStreak = await getBestStreak();
+
+    // Use the highest streak (either current or best) for achievement checking
+    final streakToCheck =
+        currentStreak > bestStreak ? currentStreak : bestStreak;
+
     return {
-      'shouldUnlock': currentStreak >= achievement.targetCount,
-      'currentProgress': currentStreak,
+      'shouldUnlock': streakToCheck >= achievement.targetCount,
+      'currentProgress': currentStreak, // Show current streak as progress
     };
   }
 
@@ -429,7 +473,6 @@ class AchievementService {
         shouldUnlock = currentProgress >= achievement.targetCount;
         break;
       default:
-        // Fallback to total dhikr count
         currentProgress = userStats['total_dhikr_count'] ?? 0;
         shouldUnlock = currentProgress >= achievement.targetCount;
     }
@@ -446,7 +489,6 @@ class AchievementService {
               .length;
 
       if (totalUnlocked >= 29) {
-        // All achievements except master
         final unlockedMaster = masterAchievement.copyWith(
           isUnlocked: true,
           unlockedAt: DateTime.now(),
@@ -454,7 +496,6 @@ class AchievementService {
         await _achievementBox.put('dhikr_master', unlockedMaster);
         newlyUnlocked.add(unlockedMaster);
 
-        // Add master achievement points
         final userStats = _userStatsBox.get('user_stats') ?? {};
         userStats['total_points'] =
             (userStats['total_points'] ?? 0) + masterAchievement.points;

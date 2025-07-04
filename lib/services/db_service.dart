@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/dhikr.dart';
 import '../data/init_dhikr_data.dart';
+import '../services/achievement_service.dart'; // Add this import
 
 class DbService {
   static const String _boxName = 'dhikr_box';
@@ -8,6 +10,17 @@ class DbService {
   static const String _lastResetDateKey = 'last_reset_date';
   static Box<Dhikr>? _box;
   static bool _isInitialized = false;
+
+  // Add achievement service instance
+  static AchievementService? _achievementService;
+
+  // Initialize achievement service
+  static Future<void> initAchievementService() async {
+    if (_achievementService == null) {
+      _achievementService = AchievementService();
+      await _achievementService!.init();
+    }
+  }
 
   // Initialize Hive and open the box
   static Future<void> init() async {
@@ -27,6 +40,9 @@ class DbService {
         _box = await Hive.openBox<Dhikr>(_boxName);
       }
 
+      // Initialize achievement service
+      await initAchievementService();
+
       // Add initial data if this is the first time opening the app
       await _addInitialDataIfNeeded();
 
@@ -36,6 +52,51 @@ class DbService {
       _isInitialized = true;
     } catch (e) {
       throw Exception('Failed to initialize database: $e');
+    }
+  }
+
+  // Update - Increment dhikr count
+  static Future<void> incrementDhikrCount(int dhikrId) async {
+    try {
+      if (!isInitialized) await init();
+
+      final dhikr = getDhikrById(dhikrId);
+      if (dhikr != null) {
+        final oldCount = dhikr.currentCount ?? 0;
+        final newCount = oldCount + 1;
+        final wasCompleted = oldCount >= dhikr.times;
+        final isNowCompleted = newCount >= dhikr.times;
+
+        final updatedDhikr = Dhikr(
+          id: dhikr.id,
+          dhikrTitle: dhikr.dhikrTitle,
+          dhikr: dhikr.dhikr,
+          times: dhikr.times,
+          when: dhikr.when,
+          currentCount: newCount,
+        );
+
+        // Find the index and update
+        final index = _dhikrBox.values.toList().indexWhere(
+          (d) => d.id == dhikrId,
+        );
+
+        if (index != -1) {
+          await _dhikrBox.putAt(index, updatedDhikr);
+
+          // Notify achievement service if dhikr just got completed
+          if (!wasCompleted && isNowCompleted) {
+            await _checkDailyCompletionAndUpdateStreak(updatedDhikr);
+            if (_achievementService != null) {
+              await _achievementService!.updateDhikrCount(updatedDhikr, 1);
+            }
+          }
+        } else {
+          throw Exception('Dhikr not found');
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to increment dhikr count: $e');
     }
   }
 
@@ -64,11 +125,45 @@ class DbService {
       if (lastResetDate != todayString) {
         await _resetAllDhikrCounters();
         await preferences.put(_lastResetDateKey, todayString);
-        print('Daily dhikr counters reset for date: $todayString');
+        debugPrint('Daily dhikr counters reset for date: $todayString');
+
+        // Check if we need to break the streak due to missed day
+        await _checkStreakBreak(preferences, todayString, lastResetDate);
       }
     } catch (e) {
-      print('Error checking daily reset: $e');
+      debugPrint('Error checking daily reset: $e');
       // Don't throw here to prevent app initialization failure
+    }
+  }
+
+  // Check if streak should be broken due to missed day
+  static Future<void> _checkStreakBreak(
+    Box preferences,
+    String todayString,
+    String lastResetDate,
+  ) async {
+    try {
+      if (lastResetDate.isEmpty) return;
+
+      final lastDate = DateTime.parse('${lastResetDate}T00:00:00');
+      final todayDate = DateTime.parse('${todayString}T00:00:00');
+      final daysDifference = todayDate.difference(lastDate).inDays;
+
+      // If more than 1 day has passed, break the streak
+      if (daysDifference > 1) {
+        final lastStreakDate = preferences.get(
+          'last_streak_date',
+          defaultValue: '',
+        );
+
+        // Only break streak if the last streak date is not today
+        if (lastStreakDate != todayString) {
+          await preferences.put('current_streak', 0);
+          debugPrint('Streak broken due to missed day(s)');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking streak break: $e');
     }
   }
 
@@ -91,6 +186,74 @@ class DbService {
       }
     } catch (e) {
       throw Exception('Failed to reset daily counters: $e');
+    }
+  }
+
+  // Add this method to DbService
+  static Future<void> _checkDailyCompletionAndUpdateStreak(
+    Dhikr completedDhikr,
+  ) async {
+    try {
+      final today = DateTime.now();
+      final todayString = '${today.year}-${today.month}-${today.day}';
+
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      final lastCompletionDate = preferences.get(
+        'last_completion_date',
+        defaultValue: '',
+      );
+
+      // Only update streak if this is the first completion of the day
+      if (lastCompletionDate != todayString) {
+        await preferences.put('last_completion_date', todayString);
+
+        // Update streak logic
+        final currentStreak = preferences.get(
+          'current_streak',
+          defaultValue: 0,
+        );
+        final lastStreakDate = preferences.get(
+          'last_streak_date',
+          defaultValue: '',
+        );
+        final bestStreak = preferences.get('best_streak', defaultValue: 0);
+
+        int newCurrentStreak;
+
+        if (lastStreakDate.isEmpty) {
+          newCurrentStreak = 1;
+        } else {
+          final lastDate = DateTime.parse('${lastStreakDate}T00:00:00');
+          final todayDate = DateTime.parse('${todayString}T00:00:00');
+          final daysDifference = todayDate.difference(lastDate).inDays;
+
+          if (daysDifference == 1) {
+            newCurrentStreak = currentStreak + 1;
+          } else if (daysDifference > 1) {
+            newCurrentStreak = 1; // Reset streak, start new
+          } else {
+            newCurrentStreak = currentStreak; // Same day, no change
+          }
+        }
+
+        await preferences.put('current_streak', newCurrentStreak);
+        await preferences.put('last_streak_date', todayString);
+
+        if (newCurrentStreak > bestStreak) {
+          await preferences.put('best_streak', newCurrentStreak);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error updating completion streak: $e');
     }
   }
 
@@ -438,38 +601,6 @@ class DbService {
       }
     } catch (e) {
       throw Exception('Failed to update dhikr: $e');
-    }
-  }
-
-  // Update - Increment dhikr count
-  static Future<void> incrementDhikrCount(int dhikrId) async {
-    try {
-      if (!isInitialized) await init();
-
-      final dhikr = getDhikrById(dhikrId);
-      if (dhikr != null) {
-        final updatedDhikr = Dhikr(
-          id: dhikr.id,
-          dhikrTitle: dhikr.dhikrTitle,
-          dhikr: dhikr.dhikr,
-          times: dhikr.times,
-          when: dhikr.when,
-          currentCount: (dhikr.currentCount ?? 0) + 1,
-        );
-
-        // Find the index and update
-        final index = _dhikrBox.values.toList().indexWhere(
-          (d) => d.id == dhikrId,
-        );
-
-        if (index != -1) {
-          await _dhikrBox.putAt(index, updatedDhikr);
-        } else {
-          throw Exception('Dhikr not found');
-        }
-      }
-    } catch (e) {
-      throw Exception('Failed to increment dhikr count: $e');
     }
   }
 

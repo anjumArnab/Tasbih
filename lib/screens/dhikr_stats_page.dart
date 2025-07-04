@@ -30,6 +30,10 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
   Map<DateTime, int> _activityData = {};
   int _totalDhikrSessions = 0;
 
+  // Streak data from AchievementService
+  int _currentStreak = 0;
+  int _bestStreak = 0;
+
   static const Color primaryColor = Color(0xFF0F4C75);
   static const Color secondaryColor = Color(0xFF3282B8);
   static const Color backgroundColor = Color(0xFFF8FBFF);
@@ -51,22 +55,57 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
       // Initialize database
       await DbService.init();
 
-      // Initialize achievements first
-      await _initializeAchievements();
+      // Initialize achievements service
+      await _achievementService.init();
 
-      // Check and update streak status before loading data
-      await _achievementService.checkAndUpdateStreakStatus();
-
-      // Load activity data
-      await _loadActivityData();
-
-      // Reload achievement data after streak check
-      await _loadAchievementData();
+      // Load all data
+      await _loadAllData();
     } catch (e) {
       print('Error initializing data: $e');
       setState(() {
         _errorMessage = 'Failed to load data: ${e.toString()}';
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadAllData() async {
+    try {
+      // Load activity data
+      await _loadActivityData();
+
+      // Load streak data from AchievementService
+      await _loadStreakData();
+
+      // Load achievement data
+      await _loadAchievementData();
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading data: $e');
+      setState(() {
+        _errorMessage = 'Failed to load data: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadStreakData() async {
+    try {
+      final currentStreak = await _achievementService.getCurrentStreak();
+      final bestStreak = await _achievementService.getBestStreak();
+
+      setState(() {
+        _currentStreak = currentStreak;
+        _bestStreak = bestStreak;
+      });
+    } catch (e) {
+      print('Error loading streak data: $e');
+      setState(() {
+        _currentStreak = 0;
+        _bestStreak = 0;
       });
     }
   }
@@ -113,19 +152,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     }
   }
 
-  Future<void> _initializeAchievements() async {
-    try {
-      await _achievementService.init();
-      await _loadAchievementData();
-    } catch (e) {
-      print('Error initializing achievements: $e');
-      setState(() {
-        _errorMessage = 'Failed to load achievements: ${e.toString()}';
-        _isLoading = false;
-      });
-    }
-  }
-
   Future<void> _loadAchievementData() async {
     try {
       // Recalculate achievements to ensure they're up to date
@@ -135,20 +161,29 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         _achievements = _achievementService.getAllAchievements();
         _unlockedAchievements = _achievementService.getUnlockedAchievements();
         _userStats = _achievementService.getUserStats();
-        _isLoading = false;
       });
     } catch (e) {
       print('Error loading achievement data: $e');
       setState(() {
         _errorMessage = 'Failed to load achievement data: ${e.toString()}';
-        _isLoading = false;
       });
     }
   }
 
   Future<void> _refreshData() async {
-    await _loadActivityData();
-    await _loadAchievementData();
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _loadAllData();
+    } catch (e) {
+      print('Error refreshing data: $e');
+      setState(() {
+        _errorMessage = 'Failed to refresh data: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -652,11 +687,7 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
 
   Widget _buildActivityGridSection() {
     return RefreshIndicator(
-      onRefresh: () async {
-        // Check streak status before refreshing data
-        await _achievementService.checkAndUpdateStreakStatus();
-        await _refreshData();
-      },
+      onRefresh: _refreshData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -691,14 +722,13 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
                   children: [
                     _buildCompactStreakInfo(
                       label: 'Current',
-                      // Use the enhanced getCurrentStreak method
-                      value: '${_achievementService.getCurrentStreak()}',
+                      value: _currentStreak.toString(),
                       color: const Color(0xFF0F4C75),
                     ),
                     const SizedBox(width: 15),
                     _buildCompactStreakInfo(
                       label: 'Best',
-                      value: '${_userStats['longest_streak'] ?? 0}',
+                      value: _bestStreak.toString(),
                       color: const Color(0xFF00A8CC),
                     ),
                   ],
@@ -707,7 +737,7 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
             ),
             const SizedBox(height: 20),
 
-            // Rest of your activity grid code...
+            // Activity Grid
             SizedBox(
               height: 140,
               child: PageView(
@@ -732,7 +762,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     );
   }
 
-  // Updated _buildCompactStreakInfo to ensure real-time streak values
   Widget _buildCompactStreakInfo({
     required String label,
     required String value,
@@ -927,12 +956,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     );
   }
 
-  /// Get activity color based on completed dhikr count for a specific date
-  /// 0 dhikr: Light gray (Color(0xFFEBEDF0))
-  /// 1 dhikr: Light primary color (Color(0xFF0F4C75).withOpacity(0.3))
-  /// 2 dhikr: Medium primary color (Color(0xFF0F4C75).withOpacity(0.5))
-  /// 3 dhikr: Darker primary color (Color(0xFF0F4C75).withOpacity(0.7))
-  /// 4+ dhikr: Full primary color (Color(0xFF0F4C75))
   Color _getActivityColor(int level) {
     switch (level) {
       case 0:
