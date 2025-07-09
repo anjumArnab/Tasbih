@@ -737,22 +737,8 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
             ),
             const SizedBox(height: 20),
 
-            // Activity Grid
-            SizedBox(
-              height: 140,
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (page) {
-                  setState(() {
-                    _currentPage = page;
-                  });
-                },
-                children: [
-                  _buildSixMonthGrid(isFirstHalf: true),
-                  _buildSixMonthGrid(isFirstHalf: false),
-                ],
-              ),
-            ),
+            // Activity Grid - Show only relevant 6-month period
+            SizedBox(height: 140, child: _buildCurrentSixMonthGrid()),
             const SizedBox(height: 15),
             _buildActivityLegend(),
             const SizedBox(height: 20),
@@ -784,6 +770,18 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         ),
       ],
     );
+  }
+
+  // New method to determine which 6-month grid to show
+  Widget _buildCurrentSixMonthGrid() {
+    final now = DateTime.now();
+    final currentMonth = now.month;
+
+    // If current month is January to June (1-6), show first half
+    // If current month is July to December (7-12), show second half
+    final isFirstHalf = currentMonth >= 1 && currentMonth <= 6;
+
+    return _buildSixMonthGrid(isFirstHalf: isFirstHalf);
   }
 
   Widget _buildSixMonthGrid({required bool isFirstHalf}) {
