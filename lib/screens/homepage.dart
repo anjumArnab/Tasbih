@@ -256,10 +256,10 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor:
-          backgroundColor, // Changed back to backgroundColor (light blue)
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text(
           'Tasbih',
@@ -281,7 +281,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           ),
         ),
       ),
-
       floatingActionButton: Container(
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [accentColor, secondaryColor]),
@@ -294,53 +293,60 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           child: const Icon(Icons.refresh, color: Colors.white, size: 28),
         ),
       ),
-
       body: SafeArea(
         child: Column(
           children: [
             if (_currentDhikr != null) DhikrTile(dhikr: _currentDhikr!),
             Expanded(
               child: Container(
-                color:
-                    backgroundColor, // Changed to backgroundColor to match Scaffold
+                color: backgroundColor,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 20.0,
+                  ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // Counter Display
                       Text(
                         '$_counter',
-                        style: const TextStyle(
-                          fontSize: 60,
+                        style: TextStyle(
+                          fontSize: screenHeight < 600 ? 44 : 56,
                           fontWeight: FontWeight.w300,
-                          color:
-                              primaryColor, // Changed to primaryColor for better contrast on light background
+                          color: primaryColor,
                           height: 1,
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 40),
+
+                      // Buttons Section
                       Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Increment Button
                           AnimatedCircleButton(
                             animation: _incrementScale,
                             onTap: _increment,
                             icon: Icons.keyboard_arrow_up,
-                            size: screenWidth < 400 ? 120 : 150,
-                            iconSize: screenWidth < 400 ? 60 : 75,
+                            size: screenWidth < 400 ? 80 : 100,
+                            iconSize: screenWidth < 400 ? 40 : 50,
                           ),
-                          const SizedBox(height: 15),
+
+                          SizedBox(height: screenHeight < 600 ? 8 : 12),
+
+                          // Decrement Button
                           AnimatedCircleButton(
                             animation: _decrementScale,
                             onTap: _decrement,
                             icon: Icons.keyboard_arrow_down,
-                            size: 50,
-                            iconSize: 25,
+                            size: screenHeight < 600 ? 35 : 45,
+                            iconSize: screenHeight < 600 ? 18 : 22,
                           ),
-                          const SizedBox(height: 30),
+
+                          SizedBox(height: screenHeight < 600 ? 16 : 24),
+
                           // Next Dhikr Button
                           Container(
                             decoration: BoxDecoration(
@@ -361,29 +367,29 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 elevation: 0,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: screenWidth < 400 ? 18 : 20,
+                                  vertical: screenHeight < 600 ? 8 : 10,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(25),
                                 ),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.skip_next,
                                     color: Colors.white,
-                                    size: 20,
+                                    size: screenHeight < 600 ? 16 : 18,
                                   ),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Text(
                                     'Next Dhikr',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 16,
+                                      fontSize: screenHeight < 600 ? 13 : 15,
                                     ),
                                   ),
                                 ],
