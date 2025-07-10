@@ -61,9 +61,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
   Future<void> _loadFirstIncompleteDhikr() async {
     try {
-      // Remove the redundant init() call - it should be called once in main()
-      // await DbService.init();
-
       // Ensure database is initialized before proceeding
       if (!DbService.isInitialized) {
         await DbService.init();
@@ -147,13 +144,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         );
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _incrementController.dispose();
-    _decrementController.dispose();
-    super.dispose();
   }
 
   void _increment() async {
@@ -251,6 +241,13 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         _counter = 0;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _incrementController.dispose();
+    _decrementController.dispose();
+    super.dispose();
   }
 
   @override
@@ -406,26 +403,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
           ],
         ),
       ),
-    );
-  }
-}
-
-extension DhikrExtension on Dhikr {
-  Dhikr copyWith({
-    int? id,
-    String? dhikrTitle,
-    String? dhikr,
-    int? times,
-    DateTime? when,
-    int? currentCount,
-  }) {
-    return Dhikr(
-      id: id ?? this.id,
-      dhikrTitle: dhikrTitle ?? this.dhikrTitle,
-      dhikr: dhikr ?? this.dhikr,
-      times: times ?? this.times,
-      when: when ?? this.when,
-      currentCount: currentCount ?? this.currentCount,
     );
   }
 }
