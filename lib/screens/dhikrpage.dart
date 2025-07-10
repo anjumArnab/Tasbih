@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:tasbih/widgets/app_snack_bar.dart';
 import '../screens/nav_wrapper.dart';
 import '../widgets/dhikr_dialog.dart';
 import '../widgets/dhikr_tile.dart';
@@ -37,13 +38,6 @@ class _DhikrpageState extends State<Dhikrpage> {
     _initializeDatabase();
   }
 
-  @override
-  void dispose() {
-    // Cancel the stream subscription to prevent memory leaks
-    _dhikrSubscription?.cancel();
-    super.dispose();
-  }
-
   Future<void> _initializeDatabase() async {
     try {
       await DbService.init();
@@ -57,12 +51,7 @@ class _DhikrpageState extends State<Dhikrpage> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize database: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackbar.showError(context, 'Failed to initialize database: $e');
         setState(() {
           _isLoading = false;
         });
@@ -94,14 +83,16 @@ class _DhikrpageState extends State<Dhikrpage> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load dhikr: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackbar.showError(context, 'Failed to load dhikr: $e');
       }
     }
+  }
+
+  @override
+  void dispose() {
+    // Cancel the stream subscription to prevent memory leaks
+    _dhikrSubscription?.cancel();
+    super.dispose();
   }
 
   void _applyFilters() {
@@ -244,11 +235,9 @@ class _DhikrpageState extends State<Dhikrpage> {
                         await _loadDhikrList();
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to update count: $e'),
-                              backgroundColor: Colors.red,
-                            ),
+                          AppSnackbar.showError(
+                            context,
+                            'Failed to update count: $e',
                           );
                         }
                       }
@@ -325,20 +314,16 @@ class _DhikrpageState extends State<Dhikrpage> {
                         await DbService.deleteDhikr(dhikr.id!);
                         await _loadDhikrList();
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Dhikr deleted successfully'),
-                              backgroundColor: Colors.green,
-                            ),
+                          AppSnackbar.showSuccess(
+                            context,
+                            'Dhikr deleted successfully',
                           );
                         }
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to delete dhikr: $e'),
-                              backgroundColor: Colors.red,
-                            ),
+                          AppSnackbar.showError(
+                            context,
+                            'Failed to delete dhikr: $e',
                           );
                         }
                       }
