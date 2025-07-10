@@ -790,11 +790,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     final startMonth = isFirstHalf ? 1 : 7;
     final endMonth = isFirstHalf ? 6 : 12;
 
-    // Calculate the start date and total days for the 6-month period
-    final startDate = DateTime(year, startMonth, 1);
-    final endDate = DateTime(year, endMonth + 1, 0); // Last day of end month
-    final totalDays = endDate.difference(startDate).inDays + 1;
-
     // Generate month labels
     final monthLabels = <String>[];
     for (int month = startMonth; month <= endMonth; month++) {
@@ -854,11 +849,12 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
               ),
               const SizedBox(width: 10),
 
-              // Activity grid
+              // Activity grid - now properly aligned by month
               Expanded(
-                child: _buildMonthlyGrid(
-                  startDate,
-                  totalDays,
+                child: _buildCalendarAlignedGrid(
+                  startMonth,
+                  endMonth,
+                  year,
                   cellSize,
                   cellSpacing,
                 ),
@@ -870,59 +866,130 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
     );
   }
 
-  Widget _buildMonthlyGrid(
-    DateTime startDate,
-    int totalDays,
+  Widget _buildCalendarAlignedGrid(
+    int startMonth,
+    int endMonth,
+    int year,
     double cellSize,
     double cellSpacing,
   ) {
-    // Calculate how many weeks we need
-    final firstDayOfWeek = startDate.weekday % 7; // Convert to 0=Sunday format
-    final totalCells = totalDays + firstDayOfWeek;
-    final weeks = (totalCells / 7).ceil();
+    // Calculate total weeks needed across all months
+    int totalWeeks = 0;
 
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: weeks,
-        childAspectRatio: 1,
-        crossAxisSpacing: cellSpacing,
-        mainAxisSpacing: cellSpacing,
+    // For each month, calculate how many weeks it spans
+    for (int month = startMonth; month <= endMonth; month++) {
+      final firstDay = DateTime(year, month, 1);
+      final lastDay = DateTime(year, month + 1, 0); // Last day of month
+      final daysInMonth = lastDay.day;
+
+      // Calculate starting day of week (0 = Sunday, 6 = Saturday)
+      final startDayOfWeek = firstDay.weekday % 7;
+
+      // Calculate weeks needed for this month
+      final weeksInMonth = ((startDayOfWeek + daysInMonth - 1) / 7).ceil();
+      totalWeeks += weeksInMonth;
+    }
+
+    // Build the grid
+    return SizedBox(
+      height: 7 * (cellSize + cellSpacing) - cellSpacing,
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        scrollDirection: Axis.horizontal,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 7, // Days of week
+          childAspectRatio: 1,
+          crossAxisSpacing: cellSpacing,
+          mainAxisSpacing: cellSpacing,
+        ),
+        itemCount: totalWeeks * 7,
+        itemBuilder: (context, index) {
+          final week = index ~/ 7;
+          final dayOfWeek = index % 7;
+
+          // Calculate which month and day this cell represents
+          final dateInfo = _getDateForGridPosition(
+            week,
+            dayOfWeek,
+            startMonth,
+            endMonth,
+            year,
+          );
+
+          if (dateInfo == null) {
+            // Empty cell (before month start or after month end)
+            return Container();
+          }
+
+          final currentDate = dateInfo['date'] as DateTime;
+          final normalizedDate = DateTime(
+            currentDate.year,
+            currentDate.month,
+            currentDate.day,
+          );
+
+          // Check if this is today
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final isToday = normalizedDate.isAtSameMomentAs(today);
+
+          // Get activity level from real data
+          final activityLevel = _activityData[normalizedDate] ?? 0;
+
+          return Container(
+            decoration: BoxDecoration(
+              color: _getActivityColor(activityLevel),
+              borderRadius: BorderRadius.circular(3),
+              border:
+                  isToday ? Border.all(color: primaryColor, width: 1) : null,
+            ),
+          );
+        },
       ),
-      itemCount: weeks * 7,
-      itemBuilder: (context, index) {
-        final week = index ~/ 7;
-        final dayInWeek = index % 7;
-        final dayIndex = week * 7 + dayInWeek - firstDayOfWeek;
+    );
+  }
 
-        // Check if this cell represents a valid day
-        if (dayIndex < 0 || dayIndex >= totalDays) {
-          return Container(); // Empty cell
+  Map<String, dynamic>? _getDateForGridPosition(
+    int week,
+    int dayOfWeek,
+    int startMonth,
+    int endMonth,
+    int year,
+  ) {
+    int currentWeek = 0;
+
+    for (int month = startMonth; month <= endMonth; month++) {
+      final firstDay = DateTime(year, month, 1);
+      final lastDay = DateTime(year, month + 1, 0);
+      final daysInMonth = lastDay.day;
+
+      // Calculate starting day of week (0 = Sunday, 6 = Saturday)
+      final startDayOfWeek = firstDay.weekday % 7;
+
+      // Calculate weeks needed for this month
+      final weeksInMonth = ((startDayOfWeek + daysInMonth - 1) / 7).ceil();
+
+      if (week >= currentWeek && week < currentWeek + weeksInMonth) {
+        // This position is within the current month
+        final weekInMonth = week - currentWeek;
+        final dayInWeek = dayOfWeek;
+
+        // Calculate the actual day of the month
+        final dayOfMonth = (weekInMonth * 7) + dayInWeek - startDayOfWeek + 1;
+
+        // Check if this is a valid day in the month
+        if (dayOfMonth >= 1 && dayOfMonth <= daysInMonth) {
+          return {'date': DateTime(year, month, dayOfMonth), 'month': month};
         }
 
-        final currentDate = startDate.add(Duration(days: dayIndex));
-        final normalizedDate = DateTime(
-          currentDate.year,
-          currentDate.month,
-          currentDate.day,
-        );
-        final isToday =
-            normalizedDate.year == DateTime.now().year &&
-            normalizedDate.month == DateTime.now().month &&
-            normalizedDate.day == DateTime.now().day;
+        // Invalid day (empty cell)
+        return null;
+      }
 
-        // Get activity level from real data
-        final activityLevel = _activityData[normalizedDate] ?? 0;
+      currentWeek += weeksInMonth;
+    }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: _getActivityColor(activityLevel),
-            borderRadius: BorderRadius.circular(3),
-            border: isToday ? Border.all(color: primaryColor, width: 2) : null,
-          ),
-        );
-      },
-    );
+    return null;
   }
 
   Widget _buildActivityLegend() {
