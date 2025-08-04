@@ -5,7 +5,7 @@ Islamic dhikr counter application featuring streak visualization with dynamic co
 ## Screenshots
 
 
-!(/assets/t01.png)
-!(/assets/t02.png)
-!(/assets/t03.png)
-!(/assets/t04.png)
+![Home](assets/t01.png)
+![Dhikrs](assets/t02.png)
+![Streaks](assets/t03.png)
+![Achievements](assets/t04.png)
