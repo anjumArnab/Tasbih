@@ -88,10 +88,6 @@ enum AchievementCategory {
   consistency,
   @HiveField(2)
   milestone,
-  @HiveField(3)
-  special,
-  @HiveField(4)
-  spiritual,
 }
 
 @HiveType(typeId: 3)

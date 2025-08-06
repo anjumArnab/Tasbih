@@ -125,10 +125,6 @@ class AchievementTile extends StatelessWidget {
         return secondaryColor;
       case AchievementCategory.milestone:
         return accentColor;
-      case AchievementCategory.special:
-        return Colors.orange;
-      case AchievementCategory.spiritual:
-        return Colors.teal;
     }
   }
 
@@ -140,10 +136,6 @@ class AchievementTile extends StatelessWidget {
         return Icons.trending_up;
       case AchievementCategory.milestone:
         return Icons.flag;
-      case AchievementCategory.special:
-        return Icons.star_border;
-      case AchievementCategory.spiritual:
-        return Icons.self_improvement;
     }
   }
 

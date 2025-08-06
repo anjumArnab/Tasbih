@@ -16,7 +16,7 @@ class DhikrStatsPage extends StatefulWidget {
 
 class _DhikrStatsPageState extends State<DhikrStatsPage> {
   late PageController _pageController;
-  int _currentPage = 0;
+  final int _currentPage = 0;
   String selectedFilter = 'activity'; // Default to activity section
 
   final AchievementService _achievementService = AchievementService();
@@ -184,13 +184,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         _isLoading = false;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _achievementService.dispose();
-    super.dispose();
   }
 
   void _applyFilters() {
@@ -539,7 +532,7 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '🎉 Recently Unlocked!',
+                  'Recently Unlocked!',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -648,10 +641,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         return Colors.green;
       case AchievementCategory.milestone:
         return Colors.purple;
-      case AchievementCategory.special:
-        return Colors.orange;
-      case AchievementCategory.spiritual:
-        return Colors.teal;
     }
   }
 
@@ -663,10 +652,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         return Icons.trending_up;
       case AchievementCategory.milestone:
         return Icons.flag;
-      case AchievementCategory.special:
-        return Icons.star_border;
-      case AchievementCategory.spiritual:
-        return Icons.self_improvement;
     }
   }
 
@@ -678,10 +663,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
         return 'Consistency';
       case AchievementCategory.milestone:
         return 'Milestone';
-      case AchievementCategory.special:
-        return 'Special';
-      case AchievementCategory.spiritual:
-        return 'Spiritual';
     }
   }
 
@@ -1035,5 +1016,12 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
       default:
         return const Color(0xFF0F4C75); // Full primary color
     }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _achievementService.dispose();
+    super.dispose();
   }
 }

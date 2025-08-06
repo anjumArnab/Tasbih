@@ -77,10 +77,7 @@ class AchievementCategoryAdapter extends TypeAdapter<AchievementCategory> {
         return AchievementCategory.consistency;
       case 2:
         return AchievementCategory.milestone;
-      case 3:
-        return AchievementCategory.special;
-      case 4:
-        return AchievementCategory.spiritual;
+
       default:
         return AchievementCategory.tasbeh;
     }
@@ -97,12 +94,6 @@ class AchievementCategoryAdapter extends TypeAdapter<AchievementCategory> {
         break;
       case AchievementCategory.milestone:
         writer.writeByte(2);
-        break;
-      case AchievementCategory.special:
-        writer.writeByte(3);
-        break;
-      case AchievementCategory.spiritual:
-        writer.writeByte(4);
         break;
     }
   }
