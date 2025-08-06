@@ -244,13 +244,6 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   @override
-  void dispose() {
-    _incrementController.dispose();
-    _decrementController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -327,19 +320,19 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
                             animation: _incrementScale,
                             onTap: _increment,
                             icon: Icons.keyboard_arrow_up,
-                            size: screenWidth < 400 ? 80 : 100,
-                            iconSize: screenWidth < 400 ? 40 : 50,
+                            size: screenWidth < 400 ? 130 : 150,
+                            iconSize: screenWidth < 400 ? 80 : 100,
                           ),
 
-                          SizedBox(height: screenHeight < 600 ? 8 : 12),
+                          SizedBox(height: screenHeight < 600 ? 10 : 15),
 
                           // Decrement Button
                           AnimatedCircleButton(
                             animation: _decrementScale,
                             onTap: _decrement,
                             icon: Icons.keyboard_arrow_down,
-                            size: screenHeight < 600 ? 35 : 45,
-                            iconSize: screenHeight < 600 ? 18 : 22,
+                            size: screenHeight < 600 ? 50 : 60,
+                            iconSize: screenHeight < 600 ? 25 : 30,
                           ),
 
                           SizedBox(height: screenHeight < 600 ? 16 : 24),
@@ -404,5 +397,12 @@ class _HomepageState extends State<Homepage> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _incrementController.dispose();
+    _decrementController.dispose();
+    super.dispose();
   }
 }
