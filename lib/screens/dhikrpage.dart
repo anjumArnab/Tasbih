@@ -25,11 +25,9 @@ class _DhikrpageState extends State<Dhikrpage> {
   // Add StreamSubscription to properly manage the listener
   StreamSubscription? _dhikrSubscription;
 
-  // Updated color scheme
   static const Color primaryColor = Color(0xFF0F4C75);
   static const Color secondaryColor = Color(0xFF3282B8);
   static const Color accentColor = Color(0xFF00A8CC);
-  static const Color lightAccent = Color(0xFFBBE1FA);
   static const Color backgroundColor = Color(0xFFF8FBFF);
 
   @override
@@ -86,13 +84,6 @@ class _DhikrpageState extends State<Dhikrpage> {
         AppSnackbar.showError(context, 'Failed to load dhikr: $e');
       }
     }
-  }
-
-  @override
-  void dispose() {
-    // Cancel the stream subscription to prevent memory leaks
-    _dhikrSubscription?.cancel();
-    super.dispose();
   }
 
   void _applyFilters() {
@@ -175,167 +166,6 @@ class _DhikrpageState extends State<Dhikrpage> {
                 NavigationWrapper(initialIndex: 0, selectedDhikr: dhikr),
       ),
       (route) => false,
-    );
-  }
-
-  Future<void> _showDhikrOptions(Dhikr dhikr) async {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            title: Text(
-              dhikr.dhikrTitle,
-              style: const TextStyle(
-                color: primaryColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(dhikr.dhikr),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: lightAccent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Progress: ${dhikr.currentCount ?? 0}/${dhikr.times}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: primaryColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-              if ((dhikr.currentCount ?? 0) < dhikr.times)
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [accentColor, secondaryColor],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      try {
-                        await DbService.incrementDhikrCount(dhikr.id!);
-                        Navigator.pop(context);
-                        await _loadDhikrList();
-                      } catch (e) {
-                        if (mounted) {
-                          AppSnackbar.showError(
-                            context,
-                            'Failed to update count: $e',
-                          );
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Count +1',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [primaryColor, secondaryColor],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _handleDhikrTap(dhikr);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Start Counting',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-              if (dhikr.id != null)
-                TextButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder:
-                          (context) => AlertDialog(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            title: const Text(
-                              'Delete Dhikr',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                            content: const Text(
-                              'Are you sure you want to delete this dhikr?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
-                    );
-
-                    if (confirm == true) {
-                      try {
-                        await DbService.deleteDhikr(dhikr.id!);
-                        await _loadDhikrList();
-                        if (mounted) {
-                          AppSnackbar.showSuccess(
-                            context,
-                            'Dhikr deleted successfully',
-                          );
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          AppSnackbar.showError(
-                            context,
-                            'Failed to delete dhikr: $e',
-                          );
-                        }
-                      }
-                    }
-                  },
-                  child: const Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-            ],
-          ),
     );
   }
 
@@ -472,12 +302,17 @@ class _DhikrpageState extends State<Dhikrpage> {
           return DhikrTile(
             dhikr: dhikr,
             onTap: () => _handleDhikrTap(dhikr),
-            onLongPress: () => _showDhikrOptions(dhikr),
             onUpdate: _loadDhikrList, // Refresh the list after update
             onDelete: _loadDhikrList, // Refresh the list after delete
           );
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _dhikrSubscription?.cancel();
+    super.dispose();
   }
 }
