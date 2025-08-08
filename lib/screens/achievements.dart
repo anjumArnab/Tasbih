@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/achievement.dart';
@@ -18,8 +20,6 @@ class _AchievementsSectionState extends State<AchievementsSection> {
   List<Achievement> _unlockedAchievements = [];
   bool _isLoading = true;
   String? _errorMessage;
-
-  static const Color primaryColor = Color(0xFF0F4C75);
 
   @override
   void initState() {
@@ -43,7 +43,7 @@ class _AchievementsSectionState extends State<AchievementsSection> {
       // Load achievement data
       await _loadAchievementData();
     } catch (e) {
-      print('Error initializing achievements data: $e');
+      debugPrint('Error initializing achievements data: $e');
       setState(() {
         _errorMessage = 'Failed to load achievements data: ${e.toString()}';
         _isLoading = false;
@@ -62,7 +62,7 @@ class _AchievementsSectionState extends State<AchievementsSection> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading achievement data: $e');
+      debugPrint('Error loading achievement data: $e');
       setState(() {
         _errorMessage = 'Failed to load achievement data: ${e.toString()}';
         _isLoading = false;
@@ -78,7 +78,7 @@ class _AchievementsSectionState extends State<AchievementsSection> {
     try {
       await _loadAchievementData();
     } catch (e) {
-      print('Error refreshing achievements data: $e');
+      debugPrint('Error refreshing achievements data: $e');
       setState(() {
         _errorMessage = 'Failed to refresh achievements data: ${e.toString()}';
         _isLoading = false;
@@ -106,30 +106,17 @@ class _AchievementsSectionState extends State<AchievementsSection> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
             Text(
-              'Error Loading Achievements Data',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red[700],
-              ),
+              'Error Loading Achievement Data.',
+              style: TextStyle(color: Colors.red[700], fontSize: 15),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage ?? 'Unknown error occurred',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.red[600]),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
+            const SizedBox(height: 15),
+            TextButton(
               onPressed: _initializeData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
+              child: Text(
+                'Retry',
+                style: TextStyle(color: Colors.red[700], fontSize: 15),
               ),
-              child: const Text('Retry'),
             ),
           ],
         ),
@@ -171,7 +158,7 @@ class _AchievementsSectionState extends State<AchievementsSection> {
                 category,
                 categoryAchievements,
               );
-            }).toList(),
+            }),
 
             const SizedBox(height: 20),
           ],
@@ -294,14 +281,12 @@ class _AchievementsSectionState extends State<AchievementsSection> {
         ),
 
         // Achievement Tiles for this category
-        ...achievements
-            .map(
-              (achievement) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AchievementTile(achievement: achievement),
-              ),
-            )
-            .toList(),
+        ...achievements.map(
+          (achievement) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: AchievementTile(achievement: achievement),
+          ),
+        ),
 
         const SizedBox(height: 16),
       ],

@@ -64,7 +64,7 @@ class _ActivitySectionState extends State<ActivitySection> {
       // Load all data
       await _loadAllData();
     } catch (e) {
-      print('Error initializing activity data: $e');
+      debugPrint('Error initializing activity data: $e');
       setState(() {
         _errorMessage = 'Failed to load activity data: ${e.toString()}';
         _isLoading = false;
@@ -86,7 +86,7 @@ class _ActivitySectionState extends State<ActivitySection> {
         _loadActivityDataSilently();
       });
     } catch (e) {
-      print('Error setting up real-time listeners: $e');
+      debugPrint('Error setting up real-time listeners: $e');
       // Continue without real-time updates if listeners fail
     }
   }
@@ -122,7 +122,7 @@ class _ActivitySectionState extends State<ActivitySection> {
         });
       }
     } catch (e) {
-      print('Error in silent activity data refresh: $e');
+      debugPrint('Error in silent activity data refresh: $e');
       // Don't show error for silent updates
     }
   }
@@ -139,7 +139,7 @@ class _ActivitySectionState extends State<ActivitySection> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading activity data: $e');
+      debugPrint('Error loading activity data: $e');
       setState(() {
         _errorMessage = 'Failed to load activity data: ${e.toString()}';
         _isLoading = false;
@@ -157,7 +157,7 @@ class _ActivitySectionState extends State<ActivitySection> {
         _bestStreak = bestStreak;
       });
     } catch (e) {
-      print('Error loading streak data: $e');
+      debugPrint('Error loading streak data: $e');
       setState(() {
         _currentStreak = 0;
         _bestStreak = 0;
@@ -185,11 +185,11 @@ class _ActivitySectionState extends State<ActivitySection> {
         _totalDhikrSessions = totalSessions;
       });
 
-      print(
+      debugPrint(
         'Activity data loaded: ${activityData.length} days, $totalSessions total sessions',
       );
     } catch (e) {
-      print('Error loading activity data: $e');
+      debugPrint('Error loading activity data: $e');
       // Set empty data on error
       setState(() {
         _activityData = {};
@@ -206,7 +206,7 @@ class _ActivitySectionState extends State<ActivitySection> {
     try {
       await _loadAllData();
     } catch (e) {
-      print('Error refreshing activity data: $e');
+      debugPrint('Error refreshing activity data: $e');
       setState(() {
         _errorMessage = 'Failed to refresh activity data: ${e.toString()}';
         _isLoading = false;
@@ -243,35 +243,17 @@ class _ActivitySectionState extends State<ActivitySection> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
             Text(
-              'Error Loading Activity Data',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red[700],
+              'Error Loading Activity Data.',
+              style: TextStyle(color: Colors.red[700], fontSize: 15),
+            ),
+            const SizedBox(height: 15),
+            TextButton(
+              onPressed: _initializeData,
+              child: Text(
+                'Retry',
+                style: TextStyle(color: Colors.red[700], fontSize: 15),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage ?? 'Unknown error occurred',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.red[600]),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: _initializeData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Retry'),
-                ),
-              ],
             ),
           ],
         ),
@@ -567,7 +549,7 @@ class _ActivitySectionState extends State<ActivitySection> {
         );
       }
     } catch (e) {
-      print('Error showing date debug info: $e');
+      debugPrint('Error showing date debug info: $e');
     }
   }
 
