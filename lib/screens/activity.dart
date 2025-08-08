@@ -1,7 +1,9 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:hive/hive.dart';
 import '../services/achievement_service.dart';
 import '../services/db_service.dart';
 
@@ -26,6 +28,10 @@ class _ActivitySectionState extends State<ActivitySection> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  // Stream subscriptions for real-time updates
+  StreamSubscription<BoxEvent>? _dhikrSubscription;
+  StreamSubscription<BoxEvent>? _activitySubscription;
+
   static const Color primaryColor = Color(0xFF0F4C75);
   static const Color secondaryColor = Color(0xFF3282B8);
 
@@ -33,6 +39,14 @@ class _ActivitySectionState extends State<ActivitySection> {
   void initState() {
     super.initState();
     _initializeData();
+    _setupRealTimeListeners();
+  }
+
+  @override
+  void dispose() {
+    _dhikrSubscription?.cancel();
+    _activitySubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeData() async {
@@ -56,6 +70,61 @@ class _ActivitySectionState extends State<ActivitySection> {
         _errorMessage = 'Failed to load activity data: ${e.toString()}';
         _isLoading = false;
       });
+    }
+  }
+
+  void _setupRealTimeListeners() {
+    try {
+      // Listen for dhikr changes (completions, increments, decrements)
+      _dhikrSubscription = DbService.watchDhikr().listen((event) {
+        // Refresh activity data when dhikr data changes
+        _loadActivityDataSilently();
+      });
+
+      // Listen for activity data changes (daily resets, manual updates)
+      _activitySubscription = DbService.watchActivityData().listen((event) {
+        // Refresh activity data when activity snapshots change
+        _loadActivityDataSilently();
+      });
+    } catch (e) {
+      print('Error setting up real-time listeners: $e');
+      // Continue without real-time updates if listeners fail
+    }
+  }
+
+  // Silent refresh without loading indicators (for real-time updates)
+  Future<void> _loadActivityDataSilently() async {
+    try {
+      if (!mounted) return;
+
+      final now = DateTime.now();
+      final startOfYear = DateTime(now.year, 1, 1);
+      final endOfYear = DateTime(now.year, 12, 31);
+
+      // Get activity data using the new DbService method
+      final activityData = await DbService.getActivityDataForDateRange(
+        startOfYear,
+        endOfYear,
+      );
+
+      // Get accurate total using the new DbService method
+      final totalSessions = await DbService.getTotalDhikrSessionsForYear();
+
+      // Get updated streak data
+      final currentStreak = await _achievementService.getCurrentStreak();
+      final bestStreak = await _achievementService.getBestStreak();
+
+      if (mounted) {
+        setState(() {
+          _activityData = activityData;
+          _totalDhikrSessions = totalSessions;
+          _currentStreak = currentStreak;
+          _bestStreak = bestStreak;
+        });
+      }
+    } catch (e) {
+      print('Error in silent activity data refresh: $e');
+      // Don't show error for silent updates
     }
   }
 
@@ -103,32 +172,23 @@ class _ActivitySectionState extends State<ActivitySection> {
       final startOfYear = DateTime(now.year, 1, 1);
       final endOfYear = DateTime(now.year, 12, 31);
 
-      // Get activity data for the entire year
+      // Get activity data using the new accurate DbService method
       final activityData = await DbService.getActivityDataForDateRange(
         startOfYear,
         endOfYear,
       );
 
-      // Calculate total dhikr sessions
-      int totalSessions = 0;
-      activityData.forEach((date, level) {
-        // Convert activity level back to approximate session count for display
-        if (level > 0) {
-          totalSessions +=
-              level == 1
-                  ? 1
-                  : level == 2
-                  ? 2
-                  : level == 3
-                  ? 3
-                  : 4;
-        }
-      });
+      // Get accurate total sessions using the new DbService method
+      final totalSessions = await DbService.getTotalDhikrSessionsForYear();
 
       setState(() {
         _activityData = activityData;
         _totalDhikrSessions = totalSessions;
       });
+
+      print(
+        'Activity data loaded: ${activityData.length} days, $totalSessions total sessions',
+      );
     } catch (e) {
       print('Error loading activity data: $e');
       // Set empty data on error
@@ -158,7 +218,16 @@ class _ActivitySectionState extends State<ActivitySection> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading activity data...'),
+          ],
+        ),
+      );
     }
 
     if (_errorMessage != null) {
@@ -192,13 +261,18 @@ class _ActivitySectionState extends State<ActivitySection> {
               style: TextStyle(fontSize: 14, color: Colors.red[600]),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _initializeData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _initializeData,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
           ],
         ),
@@ -218,26 +292,28 @@ class _ActivitySectionState extends State<ActivitySection> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Dhikr Journey',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F4C75),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Dhikr Journey',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F4C75),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$_totalDhikrSessions dhikr sessions this year',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF666666),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$_totalDhikrSessions dhikr sessions this year',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF666666),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Row(
                   children: [
@@ -454,20 +530,46 @@ class _ActivitySectionState extends State<ActivitySection> {
           final today = DateTime(now.year, now.month, now.day);
           final isToday = normalizedDate.isAtSameMomentAs(today);
 
-          // Get activity level from real data
+          // Get activity level from the new accurate data source
           final activityLevel = _activityData[normalizedDate] ?? 0;
 
-          return Container(
-            decoration: BoxDecoration(
-              color: _getActivityColor(activityLevel),
-              borderRadius: BorderRadius.circular(3),
-              border:
-                  isToday ? Border.all(color: primaryColor, width: 1) : null,
+          return GestureDetector(
+            onTap: () => _showDateDebugInfo(normalizedDate, activityLevel),
+            child: Container(
+              decoration: BoxDecoration(
+                color: _getActivityColor(activityLevel),
+                borderRadius: BorderRadius.circular(3),
+                border:
+                    isToday ? Border.all(color: primaryColor, width: 1) : null,
+              ),
             ),
           );
         },
       ),
     );
+  }
+
+  // Debug method to show date information
+  void _showDateDebugInfo(DateTime date, int activityLevel) async {
+    try {
+      final completedCount = await DbService.getCompletedDhikrCountForDate(
+        date,
+      );
+      final dateStr = DateFormat('MMM dd, yyyy').format(date);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$dateStr: $completedCount completed dhikr (level $activityLevel)',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error showing date debug info: $e');
+    }
   }
 
   Map<String, dynamic>? _getDateForGridPosition(
