@@ -33,7 +33,6 @@ class _ActivitySectionState extends State<ActivitySection> {
   StreamSubscription<BoxEvent>? _activitySubscription;
 
   static const Color primaryColor = Color(0xFF0F4C75);
-  static const Color secondaryColor = Color(0xFF3282B8);
 
   @override
   void initState() {

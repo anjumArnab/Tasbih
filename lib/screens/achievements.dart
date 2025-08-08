@@ -16,7 +16,6 @@ class _AchievementsSectionState extends State<AchievementsSection> {
   final AchievementService _achievementService = AchievementService();
   List<Achievement> _achievements = [];
   List<Achievement> _unlockedAchievements = [];
-  Map<dynamic, dynamic> _userStats = {};
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -60,7 +59,6 @@ class _AchievementsSectionState extends State<AchievementsSection> {
       setState(() {
         _achievements = _achievementService.getAllAchievements();
         _unlockedAchievements = _achievementService.getUnlockedAchievements();
-        _userStats = _achievementService.getUserStats();
         _isLoading = false;
       });
     } catch (e) {
