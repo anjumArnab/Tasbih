@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/dhikr.dart';
 import '../data/init_dhikr_data.dart';
@@ -11,13 +10,11 @@ class DbService {
   static const String _lastResetDateKey = 'last_reset_date';
 
   static Box<Dhikr>? _box;
-  static Box? _activityBox; // New box for storing daily activity snapshots
+  static Box? _activityBox;
   static bool _isInitialized = false;
 
-  // Add achievement service instance
   static AchievementService? _achievementService;
 
-  // Initialize achievement service
   static Future<void> initAchievementService() async {
     if (_achievementService == null) {
       _achievementService = AchievementService();
@@ -25,36 +22,26 @@ class DbService {
     }
   }
 
-  // Initialize Hive and open the boxes
   static Future<void> init() async {
-    // Prevent multiple initializations
     if (_isInitialized && _box != null && _box!.isOpen) {
       return;
     }
 
     try {
-      // Register the adapter if not already registered
       if (!Hive.isAdapterRegistered(0)) {
         Hive.registerAdapter(DhikrAdapter());
       }
 
-      // Open dhikr box if not already open
       if (_box == null || !_box!.isOpen) {
         _box = await Hive.openBox<Dhikr>(_boxName);
       }
 
-      // Open activity tracking box
       if (_activityBox == null || !_activityBox!.isOpen) {
         _activityBox = await Hive.openBox(_activityBoxName);
       }
 
-      // Initialize achievement service
       await initAchievementService();
-
-      // Add initial data if this is the first time opening the app
       await _addInitialDataIfNeeded();
-
-      // Check and reset counters if it's a new day
       await _checkAndResetDailyCounters();
 
       _isInitialized = true;
@@ -63,7 +50,25 @@ class DbService {
     }
   }
 
-  // Update - Increment dhikr count
+  static String _normalizeDateString(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static DateTime? _parseNormalizedDate(String dateString) {
+    try {
+      final parts = dateString.split('-');
+      if (parts.length != 3) return null;
+
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+
+      return DateTime(year, month, day);
+    } catch (e) {
+      return null;
+    }
+  }
+
   static Future<void> incrementDhikrCount(int dhikrId) async {
     try {
       if (!isInitialized) await init();
@@ -84,20 +89,17 @@ class DbService {
           currentCount: newCount,
         );
 
-        // Find the index and update
         final index = _dhikrBox.values.toList().indexWhere(
           (d) => d.id == dhikrId,
         );
 
         if (index != -1) {
           await _dhikrBox.putAt(index, updatedDhikr);
-
-          // Update today's activity snapshot immediately
           await _updateTodayActivitySnapshot();
 
-          // Notify achievement service if dhikr just got completed
           if (!wasCompleted && isNowCompleted) {
             await _checkDailyCompletionAndUpdateStreak(updatedDhikr);
+
             if (_achievementService != null) {
               await _achievementService!.updateDhikrCount(updatedDhikr, 1);
             }
@@ -111,33 +113,25 @@ class DbService {
     }
   }
 
-  // Store or update today's activity snapshot
   static Future<void> _updateTodayActivitySnapshot() async {
     try {
       final today = DateTime.now();
-      final todayKey = '${today.year}-${today.month}-${today.day}';
+      final todayKey = _normalizeDateString(today);
 
-      // Count completed dhikr for today
       final completedCount = _getTodayCompletedDhikrCount();
       final activityLevel = _convertCountToActivityLevel(completedCount);
 
-      // Store today's activity data
       await _activityBox!.put(todayKey, {
         'date': todayKey,
         'completedCount': completedCount,
         'activityLevel': activityLevel,
         'timestamp': today.millisecondsSinceEpoch,
       });
-
-      debugPrint(
-        'Updated today\'s activity: $completedCount completed, level $activityLevel',
-      );
     } catch (e) {
-      debugPrint('Error updating today\'s activity snapshot: $e');
+      // Silent error handling
     }
   }
 
-  // Get today's completed dhikr count from current state
   static int _getTodayCompletedDhikrCount() {
     try {
       final allDhikr = _dhikrBox.values.toList();
@@ -151,12 +145,10 @@ class DbService {
 
       return completedCount;
     } catch (e) {
-      debugPrint('Error getting today\'s completed count: $e');
       return 0;
     }
   }
 
-  // Enhanced: Check if it's a new day and reset all dhikr counters
   static Future<void> _checkAndResetDailyCounters() async {
     try {
       Box? preferences;
@@ -170,73 +162,54 @@ class DbService {
       }
 
       final today = DateTime.now();
-      final todayString = '${today.year}-${today.month}-${today.day}';
+      final todayString = _normalizeDateString(today);
 
       final lastResetDate = preferences.get(
         _lastResetDateKey,
         defaultValue: '',
       );
 
-      // If it's a new day, store yesterday's activity and reset all counters
       if (lastResetDate != todayString) {
-        // CRITICAL: Check for streak breaks BEFORE resetting counters
         await _checkStreakBreak(preferences, todayString, lastResetDate);
 
-        // Store yesterday's final activity snapshot before resetting
         if (lastResetDate.isNotEmpty) {
           await _storeYesterdayActivitySnapshot(lastResetDate);
         }
 
-        // Reset all dhikr counters
         await _resetAllDhikrCounters();
-
-        // Update last reset date
         await preferences.put(_lastResetDateKey, todayString);
-        debugPrint('Daily dhikr counters reset for date: $todayString');
-
-        // Initialize today's activity snapshot with 0
         await _initializeTodayActivitySnapshot();
       } else {
-        // Same day - just update today's activity snapshot
         await _updateTodayActivitySnapshot();
       }
     } catch (e) {
-      debugPrint('Error checking daily reset: $e');
-      // Don't throw here to prevent app initialization failure
+      // Silent error handling to prevent app initialization failure
     }
   }
 
-  // Store yesterday's final activity snapshot
   static Future<void> _storeYesterdayActivitySnapshot(
     String lastResetDate,
   ) async {
     try {
-      // Get yesterday's completed count before reset
       final completedCount = _getTodayCompletedDhikrCount();
       final activityLevel = _convertCountToActivityLevel(completedCount);
 
-      // Store yesterday's final activity
       await _activityBox!.put(lastResetDate, {
         'date': lastResetDate,
         'completedCount': completedCount,
         'activityLevel': activityLevel,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'isFinal': true, // Mark as final snapshot
+        'isFinal': true,
       });
-
-      debugPrint(
-        'Stored yesterday\'s final activity ($lastResetDate): $completedCount completed, level $activityLevel',
-      );
     } catch (e) {
-      debugPrint('Error storing yesterday\'s activity snapshot: $e');
+      // Silent error handling
     }
   }
 
-  // Initialize today's activity snapshot with 0
   static Future<void> _initializeTodayActivitySnapshot() async {
     try {
       final today = DateTime.now();
-      final todayKey = '${today.year}-${today.month}-${today.day}';
+      final todayKey = _normalizeDateString(today);
 
       await _activityBox!.put(todayKey, {
         'date': todayKey,
@@ -244,14 +217,11 @@ class DbService {
         'activityLevel': 0,
         'timestamp': today.millisecondsSinceEpoch,
       });
-
-      debugPrint('Initialized today\'s activity snapshot: 0 completed');
     } catch (e) {
-      debugPrint('Error initializing today\'s activity snapshot: $e');
+      // Silent error handling
     }
   }
 
-  // Enhanced: Check if streak should be broken due to missed day
   static Future<void> _checkStreakBreak(
     Box preferences,
     String todayString,
@@ -259,29 +229,42 @@ class DbService {
   ) async {
     try {
       if (lastResetDate.isEmpty) {
-        // First time using app, initialize streak to 0
         await preferences.put('current_streak', 0);
-        debugPrint('First time app usage - streak initialized to 0');
         return;
       }
 
-      final lastDate = DateTime.parse('${lastResetDate}T00:00:00');
-      final todayDate = DateTime.parse('${todayString}T00:00:00');
+      final lastDate = _parseNormalizedDate(lastResetDate);
+      final todayDate = _parseNormalizedDate(todayString);
+
+      if (lastDate == null || todayDate == null) {
+        await preferences.put('current_streak', 0);
+        return;
+      }
+
       final daysDifference = todayDate.difference(lastDate).inDays;
 
-      // If more than 1 day has passed, break the streak
       if (daysDifference > 1) {
-        await preferences.put('current_streak', 0);
-        debugPrint('Streak broken due to ${daysDifference - 1} missed day(s)');
+        bool streakBroken = false;
+
+        for (int i = 1; i < daysDifference; i++) {
+          final checkDate = lastDate.add(Duration(days: i));
+          final completedCount = await getCompletedDhikrCountForDate(checkDate);
+
+          if (completedCount == 0) {
+            streakBroken = true;
+            break;
+          }
+        }
+
+        if (streakBroken) {
+          await preferences.put('current_streak', 0);
+        }
       }
-      // If exactly 1 day (consecutive), streak continues naturally when dhikr completed
-      // If 0 days (same day), no change needed
     } catch (e) {
-      debugPrint('Error checking streak break: $e');
+      await preferences.put('current_streak', 0);
     }
   }
 
-  // Reset all dhikr counters to 0
   static Future<void> _resetAllDhikrCounters() async {
     try {
       final allDhikr = _dhikrBox.values.toList();
@@ -303,13 +286,12 @@ class DbService {
     }
   }
 
-  // Enhanced: Updated method for checking daily completion and updating streak
   static Future<void> _checkDailyCompletionAndUpdateStreak(
     Dhikr completedDhikr,
   ) async {
     try {
       final today = DateTime.now();
-      final todayString = '${today.year}-${today.month}-${today.day}';
+      final todayString = _normalizeDateString(today);
 
       Box? preferences;
       try {
@@ -326,11 +308,9 @@ class DbService {
         defaultValue: '',
       );
 
-      // Only update streak if this is the first completion of the day
       if (lastCompletionDate != todayString) {
         await preferences.put('last_completion_date', todayString);
 
-        // Get current streak values
         final currentStreak = preferences.get(
           'current_streak',
           defaultValue: 0,
@@ -344,45 +324,58 @@ class DbService {
         int newCurrentStreak;
 
         if (lastStreakDate.isEmpty) {
-          // First ever completion
           newCurrentStreak = 1;
         } else {
-          final lastDate = DateTime.parse('${lastStreakDate}T00:00:00');
-          final todayDate = DateTime.parse('${todayString}T00:00:00');
-          final daysDifference = todayDate.difference(lastDate).inDays;
+          final lastDate = _parseNormalizedDate(lastStreakDate);
+          final todayDate = _parseNormalizedDate(todayString);
 
-          if (daysDifference == 1) {
-            // Consecutive day - increment streak
-            newCurrentStreak = currentStreak + 1;
-          } else if (daysDifference > 1) {
-            // Gap exists - start new streak
+          if (lastDate == null || todayDate == null) {
             newCurrentStreak = 1;
           } else {
-            // Same day (shouldn't happen due to lastCompletionDate check)
-            newCurrentStreak = currentStreak;
+            final daysDifference = todayDate.difference(lastDate).inDays;
+
+            if (daysDifference == 1) {
+              newCurrentStreak = currentStreak + 1;
+            } else if (daysDifference > 1) {
+              bool hasGap = false;
+              for (int i = 1; i < daysDifference; i++) {
+                final checkDate = lastDate.add(Duration(days: i));
+                final completedCount = await getCompletedDhikrCountForDate(
+                  checkDate,
+                );
+                if (completedCount == 0) {
+                  hasGap = true;
+                  break;
+                }
+              }
+
+              if (hasGap) {
+                newCurrentStreak = 1;
+              } else {
+                newCurrentStreak = currentStreak + 1;
+              }
+            } else if (daysDifference == 0) {
+              newCurrentStreak = currentStreak;
+            } else {
+              newCurrentStreak = 1;
+            }
           }
         }
 
-        // Update streak values
         await preferences.put('current_streak', newCurrentStreak);
         await preferences.put('last_streak_date', todayString);
 
-        // Update best streak if current exceeds it
+        int newBestStreak = bestStreak;
         if (newCurrentStreak > bestStreak) {
-          await preferences.put('best_streak', newCurrentStreak);
-          debugPrint('New best streak achieved: $newCurrentStreak');
+          newBestStreak = newCurrentStreak;
+          await preferences.put('best_streak', newBestStreak);
         }
-
-        debugPrint(
-          'Streak updated: Current=$newCurrentStreak, Best=$bestStreak',
-        );
       }
     } catch (e) {
-      debugPrint('Error updating completion streak: $e');
+      // Silent error handling
     }
   }
 
-  // Public method to get current streak
   static Future<int> getCurrentStreak() async {
     try {
       Box? preferences;
@@ -397,12 +390,10 @@ class DbService {
 
       return preferences.get('current_streak', defaultValue: 0);
     } catch (e) {
-      debugPrint('Error getting current streak: $e');
       return 0;
     }
   }
 
-  // Public method to get best streak
   static Future<int> getBestStreak() async {
     try {
       Box? preferences;
@@ -417,12 +408,10 @@ class DbService {
 
       return preferences.get('best_streak', defaultValue: 0);
     } catch (e) {
-      debugPrint('Error getting best streak: $e');
       return 0;
     }
   }
 
-  // Public method to get streak data
   static Future<Map<String, int>> getStreakData() async {
     try {
       final currentStreak = await getCurrentStreak();
@@ -430,27 +419,21 @@ class DbService {
 
       return {'current': currentStreak, 'best': bestStreak};
     } catch (e) {
-      debugPrint('Error getting streak data: $e');
       return {'current': 0, 'best': 0};
     }
   }
 
-  // Manual method to reset all counters (can be called from UI if needed)
   static Future<void> resetAllCountersManually() async {
     try {
       if (!isInitialized) await init();
 
-      // Store current activity before manual reset
       final today = DateTime.now();
-      final todayKey = '${today.year}-${today.month}-${today.day}';
+      final todayKey = _normalizeDateString(today);
       await _storeYesterdayActivitySnapshot(todayKey);
 
       await _resetAllDhikrCounters();
-
-      // Initialize fresh activity snapshot
       await _initializeTodayActivitySnapshot();
 
-      // Update the last reset date to today
       Box? preferences;
       try {
         preferences =
@@ -461,14 +444,12 @@ class DbService {
         preferences = await Hive.openBox('app_preferences');
       }
 
-      final todayString = '${today.year}-${today.month}-${today.day}';
-      await preferences.put(_lastResetDateKey, todayString);
+      await preferences.put(_lastResetDateKey, todayKey);
     } catch (e) {
       throw Exception('Failed to manually reset counters: $e');
     }
   }
 
-  // Get the last reset date (for debugging or UI display)
   static Future<String> getLastResetDate() async {
     try {
       Box? preferences;
@@ -487,11 +468,10 @@ class DbService {
     }
   }
 
-  // Check if counters were reset today
   static Future<bool> wereCountersResetToday() async {
     try {
       final today = DateTime.now();
-      final todayString = '${today.year}-${today.month}-${today.day}';
+      final todayString = _normalizeDateString(today);
       final lastResetDate = await getLastResetDate();
       return lastResetDate == todayString;
     } catch (e) {
@@ -499,10 +479,8 @@ class DbService {
     }
   }
 
-  // Add initial data if the database hasn't been initialized before
   static Future<void> _addInitialDataIfNeeded() async {
     try {
-      // Check if we've already added initial data
       Box? preferences;
       try {
         preferences =
@@ -519,21 +497,14 @@ class DbService {
       );
 
       if (!isInitialized) {
-        // Clear any existing data first (optional)
         await _dhikrBox.clear();
-
-        // Get initial dhikr data from the separate file
         final initialDhikrList = InitialDhikrData.getInitialDhikrList();
 
-        // Add each dhikr to the database
         for (final dhikr in initialDhikrList) {
           await _dhikrBox.add(dhikr);
         }
 
-        // Mark as initialized so we don't add initial data again
         await preferences.put(_isInitializedKey, true);
-
-        // Initialize today's activity snapshot
         await _initializeTodayActivitySnapshot();
       }
     } catch (e) {
@@ -541,7 +512,6 @@ class DbService {
     }
   }
 
-  // Get the box instance
   static Box<Dhikr> get _dhikrBox {
     if (_box == null || !_box!.isOpen) {
       throw Exception('Database not initialized. Call DbService.init() first.');
@@ -549,7 +519,6 @@ class DbService {
     return _box!;
   }
 
-  // Get the activity box instance
   static Box get _activityStorageBox {
     if (_activityBox == null || !_activityBox!.isOpen) {
       throw Exception(
@@ -559,7 +528,6 @@ class DbService {
     return _activityBox!;
   }
 
-  // Check if database is initialized
   static bool get isInitialized =>
       _isInitialized &&
       _box != null &&
@@ -567,12 +535,10 @@ class DbService {
       _activityBox != null &&
       _activityBox!.isOpen;
 
-  // Create - Add a new dhikr
   static Future<int> addDhikr(Dhikr dhikr) async {
     try {
       if (!isInitialized) await init();
 
-      // Generate a new ID to avoid conflicts
       final existingIds = _dhikrBox.values.map((d) => d.id ?? 0).toList();
       int newId = 0;
       while (existingIds.contains(newId)) {
@@ -595,7 +561,6 @@ class DbService {
     }
   }
 
-  // Read - Get all dhikr
   static List<Dhikr> getAllDhikr() {
     try {
       if (!isInitialized) {
@@ -609,7 +574,6 @@ class DbService {
     }
   }
 
-  // Read - Get dhikr by ID
   static Dhikr? getDhikrById(int id) {
     try {
       if (!isInitialized) return null;
@@ -622,7 +586,6 @@ class DbService {
     }
   }
 
-  // Read - Get upcoming dhikr (only for dhikr with scheduled times)
   static List<Dhikr> getUpcomingDhikr() {
     try {
       if (!isInitialized) {
@@ -634,7 +597,7 @@ class DbService {
       return _dhikrBox.values
           .where(
             (dhikr) =>
-                dhikr.when != null && // Check if when is not null
+                dhikr.when != null &&
                 dhikr.when!.isAfter(now) &&
                 (dhikr.currentCount ?? 0) < dhikr.times,
           )
@@ -645,7 +608,6 @@ class DbService {
     }
   }
 
-  // Read - Get completed dhikr (current day only)
   static List<Dhikr> getCompletedDhikr() {
     try {
       if (!isInitialized) {
@@ -657,7 +619,6 @@ class DbService {
           .where((dhikr) => (dhikr.currentCount ?? 0) >= dhikr.times)
           .toList()
         ..sort((a, b) {
-          // Handle null dates in sorting
           if (a.when == null && b.when == null) return 0;
           if (a.when == null) return 1;
           if (b.when == null) return -1;
@@ -668,53 +629,46 @@ class DbService {
     }
   }
 
-  /// Get count of completed dhikr sessions for a specific date from stored activity data
   static Future<int> getCompletedDhikrCountForDate(DateTime date) async {
     try {
       if (!isInitialized) await init();
 
-      final dateKey = '${date.year}-${date.month}-${date.day}';
+      final dateKey = _normalizeDateString(date);
       final today = DateTime.now();
-      final todayKey = '${today.year}-${today.month}-${today.day}';
+      final todayKey = _normalizeDateString(today);
 
-      // If asking for today, get current live count
       if (dateKey == todayKey) {
         return _getTodayCompletedDhikrCount();
       }
 
-      // For past dates, get from stored activity data
       final activityData = _activityStorageBox.get(dateKey);
       if (activityData != null && activityData is Map) {
         return activityData['completedCount'] ?? 0;
       }
 
-      return 0; // No data for this date
+      return 0;
     } catch (e) {
-      debugPrint('Error getting completed dhikr count for date: $e');
-      return 0; // Return 0 on error to prevent UI issues
+      return 0;
     }
   }
 
-  /// Get activity level (0-4) for a specific date
   static Future<int> getActivityLevelForDate(DateTime date) async {
     try {
       final completedCount = await getCompletedDhikrCountForDate(date);
       return _convertCountToActivityLevel(completedCount);
     } catch (e) {
-      return 0; // Return 0 on error
+      return 0;
     }
   }
 
-  /// Convert completed dhikr count to activity level (0-4)
   static int _convertCountToActivityLevel(int completedCount) {
     if (completedCount == 0) return 0;
     if (completedCount == 1) return 1;
     if (completedCount == 2) return 2;
     if (completedCount == 3) return 3;
-    return 4; // 4 or more completed dhikr
+    return 4;
   }
 
-  /// Get activity data for a date range using stored historical data
   static Future<Map<DateTime, int>> getActivityDataForDateRange(
     DateTime startDate,
     DateTime endDate,
@@ -724,7 +678,6 @@ class DbService {
 
       final Map<DateTime, int> activityLevels = {};
 
-      // Initialize all dates with 0 activity
       DateTime currentDate = DateTime(
         startDate.year,
         startDate.month,
@@ -738,19 +691,16 @@ class DbService {
 
       while (currentDate.isBefore(normalizedEndDate) ||
           currentDate.isAtSameMomentAs(normalizedEndDate)) {
-        final dateKey =
-            '${currentDate.year}-${currentDate.month}-${currentDate.day}';
+        final dateKey = _normalizeDateString(currentDate);
         final today = DateTime.now();
-        final todayKey = '${today.year}-${today.month}-${today.day}';
+        final todayKey = _normalizeDateString(today);
 
         int activityLevel = 0;
 
-        // If this is today, get current live activity level
         if (dateKey == todayKey) {
           final completedCount = _getTodayCompletedDhikrCount();
           activityLevel = _convertCountToActivityLevel(completedCount);
         } else {
-          // For past dates, get from stored activity data
           final activityData = _activityStorageBox.get(dateKey);
           if (activityData != null && activityData is Map) {
             activityLevel = activityData['activityLevel'] ?? 0;
@@ -769,23 +719,20 @@ class DbService {
 
       return activityLevels;
     } catch (e) {
-      debugPrint('Error getting activity data for date range: $e');
-      return {}; // Return empty map on error
+      return {};
     }
   }
 
-  /// Get total dhikr sessions for the year from stored activity data
   static Future<int> getTotalDhikrSessionsForYear([int? year]) async {
     try {
       if (!isInitialized) await init();
 
       final targetYear = year ?? DateTime.now().year;
       final today = DateTime.now();
-      final todayKey = '${today.year}-${today.month}-${today.day}';
+      final todayKey = _normalizeDateString(today);
 
       int totalSessions = 0;
 
-      // Get all activity data keys for the year
       final allKeys = _activityStorageBox.keys.cast<String>();
 
       for (final key in allKeys) {
@@ -802,13 +749,10 @@ class DbService {
             }
           }
         } catch (e) {
-          // Skip invalid keys
           continue;
         }
       }
 
-      // For current year, check if today's data needs to be updated
-      // (in case today's snapshot is outdated)
       if (targetYear == today.year) {
         final todayStoredData = _activityStorageBox.get(todayKey);
         final currentTodayCount = _getTodayCompletedDhikrCount();
@@ -816,39 +760,31 @@ class DbService {
         if (todayStoredData != null && todayStoredData is Map) {
           final storedTodayCount = todayStoredData['completedCount'] ?? 0;
 
-          // If live count is different from stored count, update the total
           if (currentTodayCount != storedTodayCount) {
-            // Replace stored today's count with live count
             totalSessions =
                 totalSessions - (storedTodayCount as int) + currentTodayCount;
           }
         } else {
-          // Today's data not stored yet, add the current count
           totalSessions += currentTodayCount;
         }
       }
 
       return totalSessions;
     } catch (e) {
-      debugPrint('Error getting total dhikr sessions for year: $e');
       return 0;
     }
   }
 
-  // Update - Update dhikr
   static Future<void> updateDhikr(Dhikr updatedDhikr) async {
     try {
       if (!isInitialized) await init();
 
-      // Find the index of the dhikr to update
       final index = _dhikrBox.values.toList().indexWhere(
         (dhikr) => dhikr.id == updatedDhikr.id,
       );
 
       if (index != -1) {
         await _dhikrBox.putAt(index, updatedDhikr);
-
-        // Update today's activity snapshot
         await _updateTodayActivitySnapshot();
       } else {
         throw Exception('Dhikr not found for update');
@@ -858,7 +794,6 @@ class DbService {
     }
   }
 
-  // Update - Decrement dhikr count
   static Future<void> decrementDhikrCount(int dhikrId) async {
     try {
       if (!isInitialized) await init();
@@ -866,7 +801,6 @@ class DbService {
       final dhikr = getDhikrById(dhikrId);
       if (dhikr != null) {
         final currentCount = dhikr.currentCount ?? 0;
-        // Only decrement if current count is greater than 0
         if (currentCount > 0) {
           final updatedDhikr = Dhikr(
             id: dhikr.id,
@@ -877,15 +811,12 @@ class DbService {
             currentCount: currentCount - 1,
           );
 
-          // Find the index and update
           final index = _dhikrBox.values.toList().indexWhere(
             (d) => d.id == dhikrId,
           );
 
           if (index != -1) {
             await _dhikrBox.putAt(index, updatedDhikr);
-
-            // Update today's activity snapshot
             await _updateTodayActivitySnapshot();
           } else {
             throw Exception('Dhikr not found');
@@ -897,7 +828,6 @@ class DbService {
     }
   }
 
-  // Update - Reset dhikr count to 0
   static Future<void> resetDhikrCount(int dhikrId) async {
     try {
       if (!isInitialized) await init();
@@ -913,15 +843,12 @@ class DbService {
           currentCount: 0,
         );
 
-        // Find the index and update
         final index = _dhikrBox.values.toList().indexWhere(
           (d) => d.id == dhikrId,
         );
 
         if (index != -1) {
           await _dhikrBox.putAt(index, updatedDhikr);
-
-          // Update today's activity snapshot
           await _updateTodayActivitySnapshot();
         } else {
           throw Exception('Dhikr not found');
@@ -932,7 +859,6 @@ class DbService {
     }
   }
 
-  // Delete - Delete dhikr by ID
   static Future<void> deleteDhikr(int dhikrId) async {
     try {
       if (!isInitialized) await init();
@@ -943,8 +869,6 @@ class DbService {
 
       if (index != -1) {
         await _dhikrBox.deleteAt(index);
-
-        // Update today's activity snapshot after deletion
         await _updateTodayActivitySnapshot();
       } else {
         throw Exception('Dhikr not found for deletion');
@@ -954,35 +878,26 @@ class DbService {
     }
   }
 
-  // Delete - Clear all dhikr
   static Future<void> clearAllDhikr() async {
     try {
       if (!isInitialized) await init();
       await _dhikrBox.clear();
-
-      // Reset today's activity snapshot to 0
       await _initializeTodayActivitySnapshot();
     } catch (e) {
       throw Exception('Failed to clear all dhikr: $e');
     }
   }
 
-  // Clear all historical activity data (use with caution)
   static Future<void> clearAllActivityData() async {
     try {
       if (!isInitialized) await init();
       await _activityStorageBox.clear();
-
-      // Reinitialize today's activity snapshot
       await _initializeTodayActivitySnapshot();
-
-      debugPrint('All historical activity data cleared');
     } catch (e) {
       throw Exception('Failed to clear activity data: $e');
     }
   }
 
-  // Get activity data for debugging purposes
   static Future<Map<String, dynamic>> getActivityDataDebugInfo() async {
     try {
       if (!isInitialized) await init();
@@ -1001,7 +916,6 @@ class DbService {
     }
   }
 
-  // Utility - Get dhikr count
   static int getDhikrCount() {
     try {
       if (!isInitialized) return 0;
@@ -1011,7 +925,6 @@ class DbService {
     }
   }
 
-  // Listen to changes in the database
   static Stream<BoxEvent> watchDhikr() {
     if (!isInitialized) {
       throw Exception('Database not initialized. Call DbService.init() first.');
@@ -1019,7 +932,6 @@ class DbService {
     return _dhikrBox.watch();
   }
 
-  // Listen to changes in the activity database
   static Stream<BoxEvent> watchActivityData() {
     if (!isInitialized) {
       throw Exception('Database not initialized. Call DbService.init() first.');
@@ -1027,7 +939,6 @@ class DbService {
     return _activityStorageBox.watch();
   }
 
-  // Close the database (call this when app is disposed)
   static Future<void> close() async {
     try {
       if (_box != null && _box!.isOpen) {
@@ -1038,12 +949,10 @@ class DbService {
       }
       _isInitialized = false;
     } catch (e) {
-      // Ignore close errors
-      debugPrint('Error closing database: $e');
+      // Silent error handling
     }
   }
 
-  // Export activity data (for backup/debugging)
   static Future<Map<String, dynamic>> exportActivityData() async {
     try {
       if (!isInitialized) await init();
@@ -1068,7 +977,6 @@ class DbService {
     }
   }
 
-  // Import activity data (for restore/migration)
   static Future<bool> importActivityData(
     Map<String, dynamic> importData,
   ) async {
@@ -1082,15 +990,11 @@ class DbService {
           await _activityStorageBox.put(entry.key, entry.value);
         }
 
-        debugPrint(
-          'Successfully imported ${activityData.length} activity records',
-        );
         return true;
       }
 
       return false;
     } catch (e) {
-      debugPrint('Failed to import activity data: $e');
       return false;
     }
   }
