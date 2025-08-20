@@ -61,112 +61,23 @@ class AchievementService {
     });
   }
 
-  /// Get current streak from DbService
+  /// Get current streak from DbService (READ ONLY)
   Future<int> getCurrentStreak() async {
-    try {
-      Box? preferences;
-      try {
-        preferences =
-            Hive.isBoxOpen('app_preferences')
-                ? Hive.box('app_preferences')
-                : await Hive.openBox('app_preferences');
-      } catch (e) {
-        preferences = await Hive.openBox('app_preferences');
-      }
-
-      return preferences.get('current_streak', defaultValue: 0);
-    } catch (e) {
-      debugPrint('Error getting current streak: $e');
-      return 0;
-    }
+    return await DbService.getCurrentStreak();
   }
 
-  /// Get best streak from DbService
+  /// Get best streak from DbService (READ ONLY)
   Future<int> getBestStreak() async {
-    try {
-      Box? preferences;
-      try {
-        preferences =
-            Hive.isBoxOpen('app_preferences')
-                ? Hive.box('app_preferences')
-                : await Hive.openBox('app_preferences');
-      } catch (e) {
-        preferences = await Hive.openBox('app_preferences');
-      }
-
-      return preferences.get('best_streak', defaultValue: 0);
-    } catch (e) {
-      debugPrint('Error getting best streak: $e');
-      return 0;
-    }
+    return await DbService.getBestStreak();
   }
 
-  /// Update streak when dhikr is completed
-  Future<void> _updateStreakOnCompletion(
-    Box preferences,
-    String todayString,
-  ) async {
-    try {
-      final currentStreak = preferences.get('current_streak', defaultValue: 0);
-      final lastStreakDate = preferences.get(
-        'last_streak_date',
-        defaultValue: '',
-      );
-      final bestStreak = preferences.get('best_streak', defaultValue: 0);
-
-      if (lastStreakDate == todayString) {
-        // Already completed today, no need to update
-        return;
-      }
-
-      int newCurrentStreak;
-
-      if (lastStreakDate.isEmpty) {
-        // First time completing dhikr
-        newCurrentStreak = 0;
-      } else {
-        // Check if yesterday was completed
-        final lastDate = DateTime.parse('${lastStreakDate}T00:00:00');
-        final todayDate = DateTime.parse('${todayString}T00:00:00');
-        final daysDifference = todayDate.difference(lastDate).inDays;
-
-        if (daysDifference == 1) {
-          // Consecutive day
-          newCurrentStreak = currentStreak + 1;
-        } else {
-          // Gap in streak, start new streak
-          newCurrentStreak = 1;
-        }
-      }
-
-      // Update current streak and last streak date
-      await preferences.put('current_streak', newCurrentStreak);
-      await preferences.put('last_streak_date', todayString);
-
-      // Update best streak if current is better
-      if (newCurrentStreak > bestStreak) {
-        await preferences.put('best_streak', newCurrentStreak);
-      }
-    } catch (e) {
-      debugPrint('Error updating streak: $e');
-    }
-  }
-
-  /// Method to check if any dhikr was completed today
-  Future<bool> _wasAnyDhikrCompletedToday() async {
-    try {
-      final today = DateTime.now();
-      final completedCount = await DbService.getCompletedDhikrCountForDate(
-        today,
-      );
-      return completedCount > 0;
-    } catch (e) {
-      debugPrint('Error checking if dhikr was completed today: $e');
-      return false;
-    }
+  /// Get streak data from DbService (READ ONLY)
+  Future<Map<String, int>> getStreakData() async {
+    return await DbService.getStreakData();
   }
 
   /// Enhanced updateDhikrCount that integrates with DbService
+  /// NOTE: Streak logic is handled entirely by DbService
   Future<List<Achievement>> updateDhikrCount(
     Dhikr dhikr,
     int incrementCount,
@@ -190,31 +101,8 @@ class AchievementService {
 
     await _userStatsBox.put('user_stats', userStats);
 
-    // Check if this completion should update the streak
-    final today = DateTime.now();
-    final todayString = '${today.year}-${today.month}-${today.day}';
-
-    // Check if this is the first completion of the day that makes the dhikr complete
-    final isCompleted =
-        (dhikr.currentCount ?? 0) + incrementCount >= dhikr.times;
-    if (isCompleted) {
-      // Check if any dhikr was completed today before this
-      final wasCompletedBefore = await _wasAnyDhikrCompletedToday();
-      if (!wasCompletedBefore) {
-        // This is the first dhikr completion of the day, update streak
-        Box? preferences;
-        try {
-          preferences =
-              Hive.isBoxOpen('app_preferences')
-                  ? Hive.box('app_preferences')
-                  : await Hive.openBox('app_preferences');
-        } catch (e) {
-          preferences = await Hive.openBox('app_preferences');
-        }
-
-        await _updateStreakOnCompletion(preferences, todayString);
-      }
-    }
+    // NOTE: Streak logic is now handled entirely by DbService
+    // This method only updates achievement-specific stats
 
     // Check achievements
     await _checkAndUnlockAchievements(userStats, newlyUnlockedAchievements);
@@ -409,13 +297,15 @@ class AchievementService {
     return {'shouldUnlock': shouldUnlock, 'currentProgress': currentProgress};
   }
 
+  /// Enhanced streak achievement checking using DbService data
   Future<Map<String, dynamic>> _checkStreakAchievement(
     Achievement achievement,
     Map<dynamic, dynamic> userStats,
   ) async {
-    // Get streak data from DbService integration
-    final currentStreak = await getCurrentStreak();
-    final bestStreak = await getBestStreak();
+    // Get streak data from DbService (single source of truth)
+    final streakData = await getStreakData();
+    final currentStreak = streakData['current'] ?? 0;
+    final bestStreak = streakData['best'] ?? 0;
 
     // Use the highest streak (either current or best) for achievement checking
     final streakToCheck =
@@ -594,6 +484,44 @@ class AchievementService {
     }
   }
 
+  Future<void> markFajrDhikr() async {
+    final userStats = _userStatsBox.get('user_stats') ?? {};
+    final specialStats = Map<String, dynamic>.from(
+      userStats['special_achievements'] ?? {},
+    );
+    final fajrDates = List<String>.from(specialStats['fajr_dhikr_dates'] ?? []);
+
+    final today = DateTime.now();
+    final todayString = '${today.year}-${today.month}-${today.day}';
+
+    if (!fajrDates.contains(todayString)) {
+      fajrDates.add(todayString);
+      specialStats['fajr_dhikr_dates'] = fajrDates;
+      userStats['special_achievements'] = specialStats;
+      await _userStatsBox.put('user_stats', userStats);
+    }
+  }
+
+  Future<void> markMaghribDhikr() async {
+    final userStats = _userStatsBox.get('user_stats') ?? {};
+    final specialStats = Map<String, dynamic>.from(
+      userStats['special_achievements'] ?? {},
+    );
+    final maghribDates = List<String>.from(
+      specialStats['maghrib_dhikr_dates'] ?? [],
+    );
+
+    final today = DateTime.now();
+    final todayString = '${today.year}-${today.month}-${today.day}';
+
+    if (!maghribDates.contains(todayString)) {
+      maghribDates.add(todayString);
+      specialStats['maghrib_dhikr_dates'] = maghribDates;
+      userStats['special_achievements'] = specialStats;
+      await _userStatsBox.put('user_stats', userStats);
+    }
+  }
+
   Future<void> markMorningEveningDhikr() async {
     final userStats = _userStatsBox.get('user_stats') ?? {};
     final specialStats = Map<String, dynamic>.from(
@@ -601,6 +529,28 @@ class AchievementService {
     );
     specialStats['morning_evening_streak'] =
         (specialStats['morning_evening_streak'] ?? 0) + 1;
+    userStats['special_achievements'] = specialStats;
+    await _userStatsBox.put('user_stats', userStats);
+  }
+
+  Future<void> markRamadanDhikr() async {
+    final userStats = _userStatsBox.get('user_stats') ?? {};
+    final specialStats = Map<String, dynamic>.from(
+      userStats['special_achievements'] ?? {},
+    );
+    specialStats['ramadan_dhikr_count'] =
+        (specialStats['ramadan_dhikr_count'] ?? 0) + 1;
+    userStats['special_achievements'] = specialStats;
+    await _userStatsBox.put('user_stats', userStats);
+  }
+
+  Future<void> markTahajjudDhikr() async {
+    final userStats = _userStatsBox.get('user_stats') ?? {};
+    final specialStats = Map<String, dynamic>.from(
+      userStats['special_achievements'] ?? {},
+    );
+    specialStats['tahajjud_dhikr_count'] =
+        (specialStats['tahajjud_dhikr_count'] ?? 0) + 1;
     userStats['special_achievements'] = specialStats;
     await _userStatsBox.put('user_stats', userStats);
   }
@@ -617,16 +567,303 @@ class AchievementService {
     return (difference / 7).ceil();
   }
 
+  // Utility method to check if achievements need recalculation
+  Future<void> checkAndRecalculateIfNeeded() async {
+    try {
+      // This can be called periodically to ensure achievements are up-to-date
+      await recalculateAchievements();
+      debugPrint('Achievement recalculation completed');
+    } catch (e) {
+      debugPrint('Error during achievement recalculation: $e');
+    }
+  }
+
+  // Method to get streak-related achievement progress
+  Future<List<Map<String, dynamic>>> getStreakAchievementProgress() async {
+    try {
+      final streakData = await getStreakData();
+      final currentStreak = streakData['current'] ?? 0;
+      final bestStreak = streakData['best'] ?? 0;
+
+      final streakAchievements =
+          _achievementBox.values
+              .where(
+                (achievement) => achievement.type == AchievementType.streak,
+              )
+              .toList();
+
+      final progressList = <Map<String, dynamic>>[];
+
+      for (final achievement in streakAchievements) {
+        final streakToCheck =
+            currentStreak > bestStreak ? currentStreak : bestStreak;
+        final progress = (streakToCheck / achievement.targetCount * 100).clamp(
+          0,
+          100,
+        );
+
+        progressList.add({
+          'achievement': achievement,
+          'currentStreak': currentStreak,
+          'bestStreak': bestStreak,
+          'targetCount': achievement.targetCount,
+          'progress': progress.toInt(),
+          'isUnlocked': achievement.isUnlocked,
+        });
+      }
+
+      return progressList;
+    } catch (e) {
+      debugPrint('Error getting streak achievement progress: $e');
+      return [];
+    }
+  }
+
+  // Method to get all achievement progress with current status
+  Future<List<Map<String, dynamic>>> getAllAchievementProgress() async {
+    try {
+      final achievements = _achievementBox.values.toList();
+      final userStats = getUserStats();
+      final allDhikr = DbService.getAllDhikr();
+      final actualDhikrCounts = _calculateActualDhikrCounts(allDhikr);
+
+      final progressList = <Map<String, dynamic>>[];
+
+      for (final achievement in achievements) {
+        int currentProgress = 0;
+        double progressPercentage = 0.0;
+
+        switch (achievement.type) {
+          case AchievementType.count:
+            final result = _checkCountAchievement(
+              achievement,
+              actualDhikrCounts,
+              userStats,
+            );
+            currentProgress = result['currentProgress'];
+            break;
+          case AchievementType.streak:
+            final streakData = await getStreakData();
+            currentProgress = streakData['current'] ?? 0;
+            break;
+          case AchievementType.time:
+            final result = _checkTimeAchievement(achievement, userStats);
+            currentProgress = result['currentProgress'];
+            break;
+          case AchievementType.special:
+            final result = _checkSpecialAchievement(achievement, userStats);
+            currentProgress = result['currentProgress'];
+            break;
+        }
+
+        progressPercentage =
+            achievement.targetCount > 0
+                ? (currentProgress / achievement.targetCount * 100).clamp(
+                  0,
+                  100,
+                )
+                : 0.0;
+
+        progressList.add({
+          'achievement': achievement,
+          'currentProgress': currentProgress,
+          'targetCount': achievement.targetCount,
+          'progressPercentage': progressPercentage.toInt(),
+          'isUnlocked': achievement.isUnlocked,
+          'category': achievement.category.toString(),
+          'type': achievement.type.toString(),
+        });
+      }
+
+      // Sort by category and then by unlock status
+      progressList.sort((a, b) {
+        final aCategory = a['category'] as String;
+        final bCategory = b['category'] as String;
+
+        if (aCategory != bCategory) {
+          return aCategory.compareTo(bCategory);
+        }
+
+        final aUnlocked = a['isUnlocked'] as bool;
+        final bUnlocked = b['isUnlocked'] as bool;
+
+        if (aUnlocked != bUnlocked) {
+          return bUnlocked ? 1 : -1; // Unlocked first
+        }
+
+        return 0;
+      });
+
+      return progressList;
+    } catch (e) {
+      debugPrint('Error getting all achievement progress: $e');
+      return [];
+    }
+  }
+
+  // Method to get summary statistics
+  Future<Map<String, dynamic>> getAchievementSummary() async {
+    try {
+      final allAchievements = _achievementBox.values.toList();
+      final unlockedAchievements =
+          allAchievements.where((a) => a.isUnlocked).toList();
+      final totalPoints = getTotalPoints();
+      final streakData = await getStreakData();
+
+      // Calculate completion percentage
+      final completionPercentage =
+          allAchievements.isNotEmpty
+              ? (unlockedAchievements.length / allAchievements.length * 100)
+                  .round()
+              : 0;
+
+      // Get category breakdown
+      final categoryBreakdown = <String, Map<String, int>>{};
+      for (final category in AchievementCategory.values) {
+        final categoryAchievements =
+            allAchievements.where((a) => a.category == category).toList();
+        final unlockedInCategory =
+            categoryAchievements.where((a) => a.isUnlocked).length;
+
+        categoryBreakdown[category.toString()] = {
+          'total': categoryAchievements.length,
+          'unlocked': unlockedInCategory,
+          'percentage':
+              categoryAchievements.isNotEmpty
+                  ? (unlockedInCategory / categoryAchievements.length * 100)
+                      .round()
+                  : 0,
+        };
+      }
+
+      return {
+        'totalAchievements': allAchievements.length,
+        'unlockedAchievements': unlockedAchievements.length,
+        'completionPercentage': completionPercentage,
+        'totalPoints': totalPoints,
+        'currentStreak': streakData['current'],
+        'bestStreak': streakData['best'],
+        'categoryBreakdown': categoryBreakdown,
+        'totalDhikrCount': getTotalDhikrCount(),
+        'lastUpdated': DateTime.now().toIso8601String(),
+      };
+    } catch (e) {
+      debugPrint('Error getting achievement summary: $e');
+      return {
+        'totalAchievements': 0,
+        'unlockedAchievements': 0,
+        'completionPercentage': 0,
+        'totalPoints': 0,
+        'currentStreak': 0,
+        'bestStreak': 0,
+        'categoryBreakdown': {},
+        'totalDhikrCount': 0,
+        'error': e.toString(),
+      };
+    }
+  }
+
   // Reset methods for testing
   Future<void> resetAllAchievements() async {
     await _achievementBox.clear();
     await _userStatsBox.clear();
     await _initializeAchievements();
     await _initializeUserStats();
+    debugPrint('All achievements and user stats have been reset');
   }
 
+  // Export achievements data for backup
+  Future<Map<String, dynamic>> exportAchievementData() async {
+    try {
+      final achievements = <String, dynamic>{};
+      for (final key in _achievementBox.keys) {
+        final achievement = _achievementBox.get(key);
+        if (achievement != null) {
+          achievements[key.toString()] = {
+            'id': achievement.id,
+            'isUnlocked': achievement.isUnlocked,
+            'currentProgress': achievement.currentProgress,
+            'unlockedAt': achievement.unlockedAt?.toIso8601String(),
+          };
+        }
+      }
+
+      final userStats = getUserStats();
+
+      return {
+        'exportDate': DateTime.now().toIso8601String(),
+        'achievements': achievements,
+        'userStats': userStats,
+      };
+    } catch (e) {
+      return {
+        'error': 'Failed to export achievement data: $e',
+        'exportDate': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
+  // Import achievements data from backup
+  Future<bool> importAchievementData(Map<String, dynamic> importData) async {
+    try {
+      if (importData.containsKey('achievements')) {
+        final achievementsData =
+            importData['achievements'] as Map<String, dynamic>;
+
+        for (final entry in achievementsData.entries) {
+          final achievementId = entry.key;
+          final data = entry.value as Map<String, dynamic>;
+
+          final existingAchievement = _achievementBox.get(achievementId);
+          if (existingAchievement != null) {
+            final updatedAchievement = existingAchievement.copyWith(
+              isUnlocked: data['isUnlocked'] ?? false,
+              currentProgress: data['currentProgress'] ?? 0,
+              unlockedAt:
+                  data['unlockedAt'] != null
+                      ? DateTime.parse(data['unlockedAt'])
+                      : null,
+            );
+            await _achievementBox.put(achievementId, updatedAchievement);
+          }
+        }
+      }
+
+      if (importData.containsKey('userStats')) {
+        final userStatsData = importData['userStats'] as Map<String, dynamic>;
+        await _userStatsBox.put('user_stats', userStatsData);
+      }
+
+      debugPrint('Achievement data import completed successfully');
+      return true;
+    } catch (e) {
+      debugPrint('Failed to import achievement data: $e');
+      return false;
+    }
+  }
+
+  // Cleanup method
   Future<void> dispose() async {
-    await _achievementBox.close();
-    await _userStatsBox.close();
+    try {
+      if (_achievementBox.isOpen) {
+        await _achievementBox.close();
+      }
+      if (_userStatsBox.isOpen) {
+        await _userStatsBox.close();
+      }
+      debugPrint('AchievementService disposed successfully');
+    } catch (e) {
+      debugPrint('Error disposing AchievementService: $e');
+    }
+  }
+
+  // Watch for changes in achievements
+  Stream<BoxEvent> watchAchievements() {
+    return _achievementBox.watch();
+  }
+
+  // Watch for changes in user stats
+  Stream<BoxEvent> watchUserStats() {
+    return _userStatsBox.watch();
   }
 }

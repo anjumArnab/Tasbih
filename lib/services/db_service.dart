@@ -156,7 +156,7 @@ class DbService {
     }
   }
 
-  // Check if it's a new day and reset all dhikr counters
+  // Enhanced: Check if it's a new day and reset all dhikr counters
   static Future<void> _checkAndResetDailyCounters() async {
     try {
       Box? preferences;
@@ -179,6 +179,9 @@ class DbService {
 
       // If it's a new day, store yesterday's activity and reset all counters
       if (lastResetDate != todayString) {
+        // CRITICAL: Check for streak breaks BEFORE resetting counters
+        await _checkStreakBreak(preferences, todayString, lastResetDate);
+
         // Store yesterday's final activity snapshot before resetting
         if (lastResetDate.isNotEmpty) {
           await _storeYesterdayActivitySnapshot(lastResetDate);
@@ -193,9 +196,6 @@ class DbService {
 
         // Initialize today's activity snapshot with 0
         await _initializeTodayActivitySnapshot();
-
-        // Check if we need to break the streak due to missed day
-        await _checkStreakBreak(preferences, todayString, lastResetDate);
       } else {
         // Same day - just update today's activity snapshot
         await _updateTodayActivitySnapshot();
@@ -251,14 +251,19 @@ class DbService {
     }
   }
 
-  // Check if streak should be broken due to missed day
+  // Enhanced: Check if streak should be broken due to missed day
   static Future<void> _checkStreakBreak(
     Box preferences,
     String todayString,
     String lastResetDate,
   ) async {
     try {
-      if (lastResetDate.isEmpty) return;
+      if (lastResetDate.isEmpty) {
+        // First time using app, initialize streak to 0
+        await preferences.put('current_streak', 0);
+        debugPrint('First time app usage - streak initialized to 0');
+        return;
+      }
 
       final lastDate = DateTime.parse('${lastResetDate}T00:00:00');
       final todayDate = DateTime.parse('${todayString}T00:00:00');
@@ -266,17 +271,11 @@ class DbService {
 
       // If more than 1 day has passed, break the streak
       if (daysDifference > 1) {
-        final lastStreakDate = preferences.get(
-          'last_streak_date',
-          defaultValue: '',
-        );
-
-        // Only break streak if the last streak date is not today
-        if (lastStreakDate != todayString) {
-          await preferences.put('current_streak', 0);
-          debugPrint('Streak broken due to missed day(s)');
-        }
+        await preferences.put('current_streak', 0);
+        debugPrint('Streak broken due to ${daysDifference - 1} missed day(s)');
       }
+      // If exactly 1 day (consecutive), streak continues naturally when dhikr completed
+      // If 0 days (same day), no change needed
     } catch (e) {
       debugPrint('Error checking streak break: $e');
     }
@@ -304,7 +303,7 @@ class DbService {
     }
   }
 
-  // Updated method for checking daily completion and updating streak
+  // Enhanced: Updated method for checking daily completion and updating streak
   static Future<void> _checkDailyCompletionAndUpdateStreak(
     Dhikr completedDhikr,
   ) async {
@@ -331,7 +330,7 @@ class DbService {
       if (lastCompletionDate != todayString) {
         await preferences.put('last_completion_date', todayString);
 
-        // Update streak logic
+        // Get current streak values
         final currentStreak = preferences.get(
           'current_streak',
           defaultValue: 0,
@@ -345,6 +344,7 @@ class DbService {
         int newCurrentStreak;
 
         if (lastStreakDate.isEmpty) {
+          // First ever completion
           newCurrentStreak = 1;
         } else {
           final lastDate = DateTime.parse('${lastStreakDate}T00:00:00');
@@ -352,23 +352,86 @@ class DbService {
           final daysDifference = todayDate.difference(lastDate).inDays;
 
           if (daysDifference == 1) {
+            // Consecutive day - increment streak
             newCurrentStreak = currentStreak + 1;
           } else if (daysDifference > 1) {
-            newCurrentStreak = 1; // Reset streak, start new
+            // Gap exists - start new streak
+            newCurrentStreak = 1;
           } else {
-            newCurrentStreak = currentStreak; // Same day, no change
+            // Same day (shouldn't happen due to lastCompletionDate check)
+            newCurrentStreak = currentStreak;
           }
         }
 
+        // Update streak values
         await preferences.put('current_streak', newCurrentStreak);
         await preferences.put('last_streak_date', todayString);
 
+        // Update best streak if current exceeds it
         if (newCurrentStreak > bestStreak) {
           await preferences.put('best_streak', newCurrentStreak);
+          debugPrint('New best streak achieved: $newCurrentStreak');
         }
+
+        debugPrint(
+          'Streak updated: Current=$newCurrentStreak, Best=$bestStreak',
+        );
       }
     } catch (e) {
       debugPrint('Error updating completion streak: $e');
+    }
+  }
+
+  // Public method to get current streak
+  static Future<int> getCurrentStreak() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      return preferences.get('current_streak', defaultValue: 0);
+    } catch (e) {
+      debugPrint('Error getting current streak: $e');
+      return 0;
+    }
+  }
+
+  // Public method to get best streak
+  static Future<int> getBestStreak() async {
+    try {
+      Box? preferences;
+      try {
+        preferences =
+            Hive.isBoxOpen('app_preferences')
+                ? Hive.box('app_preferences')
+                : await Hive.openBox('app_preferences');
+      } catch (e) {
+        preferences = await Hive.openBox('app_preferences');
+      }
+
+      return preferences.get('best_streak', defaultValue: 0);
+    } catch (e) {
+      debugPrint('Error getting best streak: $e');
+      return 0;
+    }
+  }
+
+  // Public method to get streak data
+  static Future<Map<String, int>> getStreakData() async {
+    try {
+      final currentStreak = await getCurrentStreak();
+      final bestStreak = await getBestStreak();
+
+      return {'current': currentStreak, 'best': bestStreak};
+    } catch (e) {
+      debugPrint('Error getting streak data: $e');
+      return {'current': 0, 'best': 0};
     }
   }
 
