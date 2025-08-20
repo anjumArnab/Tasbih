@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:hive/hive.dart';
-import '../services/achievement_service.dart';
 import '../services/db_service.dart';
 
 class ActivitySection extends StatefulWidget {
@@ -15,13 +14,11 @@ class ActivitySection extends StatefulWidget {
 }
 
 class _ActivitySectionState extends State<ActivitySection> {
-  final AchievementService _achievementService = AchievementService();
-
   // Real activity data from database
   Map<DateTime, int> _activityData = {};
   int _totalDhikrSessions = 0;
 
-  // Streak data from AchievementService
+  // Streak data from DbService (single source of truth)
   int _currentStreak = 0;
   int _bestStreak = 0;
 
@@ -32,19 +29,33 @@ class _ActivitySectionState extends State<ActivitySection> {
   StreamSubscription<BoxEvent>? _dhikrSubscription;
   StreamSubscription<BoxEvent>? _activitySubscription;
 
+  // Timer for periodic sync
+  Timer? _syncTimer;
+
+  // Cache management
+  DateTime? _lastDataLoad;
+  static const _cacheValidityDuration = Duration(minutes: 1);
+
+  // Scroll controller for horizontal scrolling
+  ScrollController? _scrollController;
+
   static const Color primaryColor = Color(0xFF0F4C75);
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _initializeData();
     _setupRealTimeListeners();
+    _setupPeriodicSync();
   }
 
   @override
   void dispose() {
     _dhikrSubscription?.cancel();
     _activitySubscription?.cancel();
+    _syncTimer?.cancel();
+    _scrollController?.dispose();
     super.dispose();
   }
 
@@ -58,11 +69,13 @@ class _ActivitySectionState extends State<ActivitySection> {
       // Initialize database
       await DbService.init();
 
-      // Initialize achievements service
-      await _achievementService.init();
-
       // Load all data
       await _loadAllData();
+
+      // Auto-scroll to current month after data loads
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentMonth();
+      });
     } catch (e) {
       debugPrint('Error initializing activity data: $e');
       setState(() {
@@ -75,32 +88,60 @@ class _ActivitySectionState extends State<ActivitySection> {
   void _setupRealTimeListeners() {
     try {
       // Listen for dhikr changes (completions, increments, decrements)
-      _dhikrSubscription = DbService.watchDhikr().listen((event) {
-        // Refresh activity data when dhikr data changes
-        _loadActivityDataSilently();
-      });
+      _dhikrSubscription = DbService.watchDhikr().listen(
+        (event) {
+          // Refresh activity data when dhikr data changes
+          _loadActivityDataSilently();
+        },
+        onError: (error) {
+          debugPrint('Error in dhikr stream: $error');
+        },
+        cancelOnError: false, // Keep listening even after errors
+      );
 
       // Listen for activity data changes (daily resets, manual updates)
-      _activitySubscription = DbService.watchActivityData().listen((event) {
-        // Refresh activity data when activity snapshots change
-        _loadActivityDataSilently();
-      });
+      _activitySubscription = DbService.watchActivityData().listen(
+        (event) {
+          // Refresh activity data when activity snapshots change
+          _loadActivityDataSilently();
+        },
+        onError: (error) {
+          debugPrint('Error in activity stream: $error');
+        },
+        cancelOnError: false,
+      );
     } catch (e) {
       debugPrint('Error setting up real-time listeners: $e');
       // Continue without real-time updates if listeners fail
     }
   }
 
+  void _setupPeriodicSync() {
+    // Optional: Periodic sync every 5 minutes to ensure data consistency
+    _syncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (mounted) {
+        _loadActivityDataSilently(forceRefresh: true);
+      }
+    });
+  }
+
   // Silent refresh without loading indicators (for real-time updates)
-  Future<void> _loadActivityDataSilently() async {
+  Future<void> _loadActivityDataSilently({bool forceRefresh = false}) async {
     try {
       if (!mounted) return;
+
+      // Skip if data was loaded recently (unless forced)
+      if (!forceRefresh &&
+          _lastDataLoad != null &&
+          DateTime.now().difference(_lastDataLoad!) < _cacheValidityDuration) {
+        return;
+      }
 
       final now = DateTime.now();
       final startOfYear = DateTime(now.year, 1, 1);
       final endOfYear = DateTime(now.year, 12, 31);
 
-      // Get activity data using the new DbService method
+      // Get all data from DbService (single source of truth)
       final activityData = await DbService.getActivityDataForDateRange(
         startOfYear,
         endOfYear,
@@ -109,17 +150,17 @@ class _ActivitySectionState extends State<ActivitySection> {
       // Get accurate total using the new DbService method
       final totalSessions = await DbService.getTotalDhikrSessionsForYear();
 
-      // Get updated streak data
-      final currentStreak = await _achievementService.getCurrentStreak();
-      final bestStreak = await _achievementService.getBestStreak();
+      // Get updated streak data directly from DbService
+      final streakData = await DbService.getStreakData();
 
       if (mounted) {
         setState(() {
           _activityData = activityData;
           _totalDhikrSessions = totalSessions;
-          _currentStreak = currentStreak;
-          _bestStreak = bestStreak;
+          _currentStreak = streakData['current'] ?? 0;
+          _bestStreak = streakData['best'] ?? 0;
         });
+        _lastDataLoad = DateTime.now();
       }
     } catch (e) {
       debugPrint('Error in silent activity data refresh: $e');
@@ -132,7 +173,7 @@ class _ActivitySectionState extends State<ActivitySection> {
       // Load activity data
       await _loadActivityData();
 
-      // Load streak data from AchievementService
+      // Load streak data from DbService
       await _loadStreakData();
 
       setState(() {
@@ -149,12 +190,12 @@ class _ActivitySectionState extends State<ActivitySection> {
 
   Future<void> _loadStreakData() async {
     try {
-      final currentStreak = await _achievementService.getCurrentStreak();
-      final bestStreak = await _achievementService.getBestStreak();
+      // Get streak data directly from DbService (single source of truth)
+      final streakData = await DbService.getStreakData();
 
       setState(() {
-        _currentStreak = currentStreak;
-        _bestStreak = bestStreak;
+        _currentStreak = streakData['current'] ?? 0;
+        _bestStreak = streakData['best'] ?? 0;
       });
     } catch (e) {
       debugPrint('Error loading streak data: $e');
@@ -171,19 +212,21 @@ class _ActivitySectionState extends State<ActivitySection> {
       final startOfYear = DateTime(now.year, 1, 1);
       final endOfYear = DateTime(now.year, 12, 31);
 
-      // Get activity data using the new accurate DbService method
+      // Get activity data using the accurate DbService method
       final activityData = await DbService.getActivityDataForDateRange(
         startOfYear,
         endOfYear,
       );
 
-      // Get accurate total sessions using the new DbService method
+      // Get accurate total sessions using the DbService method
       final totalSessions = await DbService.getTotalDhikrSessionsForYear();
 
       setState(() {
         _activityData = activityData;
         _totalDhikrSessions = totalSessions;
       });
+
+      _lastDataLoad = DateTime.now();
 
       debugPrint(
         'Activity data loaded: ${activityData.length} days, $totalSessions total sessions',
@@ -198,12 +241,52 @@ class _ActivitySectionState extends State<ActivitySection> {
     }
   }
 
+  // Auto-scroll to current month
+  void _scrollToCurrentMonth() {
+    if (_scrollController == null || !_scrollController!.hasClients) return;
+
+    try {
+      final now = DateTime.now();
+      final currentMonth = now.month;
+
+      // Determine if we're in first or second half
+      final isFirstHalf = currentMonth >= 1 && currentMonth <= 6;
+      final startMonth = isFirstHalf ? 1 : 7;
+
+      // Calculate scroll position to current month
+      double scrollPosition = 0;
+      const cellSize = 16.0;
+      const cellSpacing = 3.0;
+
+      for (int month = startMonth; month < currentMonth; month++) {
+        final firstDay = DateTime(now.year, month, 1);
+        final lastDay = DateTime(now.year, month + 1, 0);
+        final daysInMonth = lastDay.day;
+        final startDayOfWeek = firstDay.weekday % 7;
+        final weeksInMonth = ((startDayOfWeek + daysInMonth - 1) / 7).ceil();
+
+        scrollPosition += weeksInMonth * (cellSize + cellSpacing);
+      }
+
+      // Animate to the calculated position
+      _scrollController!.animateTo(
+        scrollPosition,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOut,
+      );
+    } catch (e) {
+      debugPrint('Error auto-scrolling to current month: $e');
+    }
+  }
+
   Future<void> refreshData() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
+      // Clear cache to force fresh data
+      _lastDataLoad = null;
       await _loadAllData();
     } catch (e) {
       debugPrint('Error refreshing activity data: $e');
@@ -221,9 +304,12 @@ class _ActivitySectionState extends State<ActivitySection> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(color: primaryColor),
             SizedBox(height: 16),
-            Text('Loading activity data...'),
+            Text(
+              'Loading activity data...',
+              style: TextStyle(color: primaryColor),
+            ),
           ],
         ),
       );
@@ -243,17 +329,30 @@ class _ActivitySectionState extends State<ActivitySection> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Icon(Icons.error_outline, color: Colors.red[700], size: 48),
+            const SizedBox(height: 16),
             Text(
-              'Error Loading Activity Data.',
-              style: TextStyle(color: Colors.red[700], fontSize: 15),
-            ),
-            const SizedBox(height: 15),
-            TextButton(
-              onPressed: _initializeData,
-              child: Text(
-                'Retry',
-                style: TextStyle(color: Colors.red[700], fontSize: 15),
+              'Error Loading Activity Data',
+              style: TextStyle(
+                color: Colors.red[700],
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Unknown error occurred',
+              style: TextStyle(color: Colors.red[600], fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _initializeData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -264,6 +363,7 @@ class _ActivitySectionState extends State<ActivitySection> {
   Widget _buildActivityGridSection() {
     return RefreshIndicator(
       onRefresh: refreshData,
+      color: primaryColor,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -282,7 +382,7 @@ class _ActivitySectionState extends State<ActivitySection> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F4C75),
+                          color: primaryColor,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -301,7 +401,7 @@ class _ActivitySectionState extends State<ActivitySection> {
                     _buildCompactStreakInfo(
                       label: 'Current',
                       value: _currentStreak.toString(),
-                      color: const Color(0xFF0F4C75),
+                      color: primaryColor,
                     ),
                     const SizedBox(width: 15),
                     _buildCompactStreakInfo(
@@ -315,10 +415,23 @@ class _ActivitySectionState extends State<ActivitySection> {
             ),
             const SizedBox(height: 20),
 
-            // Activity Grid - Show only relevant 6-month period
+            // Activity Grid - Show only relevant 6-month period with horizontal scrolling
             SizedBox(height: 140, child: _buildCurrentSixMonthGrid()),
             const SizedBox(height: 15),
             _buildActivityLegend(),
+            const SizedBox(height: 10),
+
+            // Add scroll hint
+            Center(
+              child: Text(
+                'Swipe left/right to see more months',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -379,20 +492,45 @@ class _ActivitySectionState extends State<ActivitySection> {
 
     return Column(
       children: [
-        // Month labels
+        // Month labels - also make them scrollable
         Row(
           children: [
             const SizedBox(width: 35), // Space for day labels
-            ...monthLabels.map(
-              (month) => Expanded(
-                child: Text(
-                  month,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF666666),
-                  ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController, // Sync with grid scrolling
+                scrollDirection: Axis.horizontal,
+                physics:
+                    const NeverScrollableScrollPhysics(), // Controlled by grid
+                child: Row(
+                  children:
+                      monthLabels.map((month) {
+                        // Calculate width for each month
+                        final monthIndex = monthLabels.indexOf(month);
+                        final actualMonth = startMonth + monthIndex;
+                        final firstDay = DateTime(year, actualMonth, 1);
+                        final lastDay = DateTime(year, actualMonth + 1, 0);
+                        final daysInMonth = lastDay.day;
+                        final startDayOfWeek = firstDay.weekday % 7;
+                        final weeksInMonth =
+                            ((startDayOfWeek + daysInMonth - 1) / 7).ceil();
+                        final monthWidth =
+                            weeksInMonth * (cellSize + cellSpacing) -
+                            cellSpacing;
+
+                        return SizedBox(
+                          width: monthWidth,
+                          child: Text(
+                            month,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF666666),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
@@ -427,7 +565,7 @@ class _ActivitySectionState extends State<ActivitySection> {
               ),
               const SizedBox(width: 10),
 
-              // Activity grid - now properly aligned by month
+              // Activity grid - now with horizontal scrolling
               Expanded(
                 child: _buildCalendarAlignedGrid(
                   startMonth,
@@ -468,69 +606,85 @@ class _ActivitySectionState extends State<ActivitySection> {
       totalWeeks += weeksInMonth;
     }
 
-    // Build the grid
-    return SizedBox(
-      height: 7 * (cellSize + cellSpacing) - cellSpacing,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
+    // Calculate the total width needed for all weeks
+    final totalGridWidth = totalWeeks * (cellSize + cellSpacing) - cellSpacing;
+
+    return Scrollbar(
+      controller: _scrollController,
+      scrollbarOrientation: ScrollbarOrientation.bottom,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _scrollController,
         scrollDirection: Axis.horizontal,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 7, // Days of week
-          childAspectRatio: 1,
-          crossAxisSpacing: cellSpacing,
-          mainAxisSpacing: cellSpacing,
-        ),
-        itemCount: totalWeeks * 7,
-        itemBuilder: (context, index) {
-          final week = index ~/ 7;
-          final dayOfWeek = index % 7;
-
-          // Calculate which month and day this cell represents
-          final dateInfo = _getDateForGridPosition(
-            week,
-            dayOfWeek,
-            startMonth,
-            endMonth,
-            year,
-          );
-
-          if (dateInfo == null) {
-            // Empty cell (before month start or after month end)
-            return Container();
-          }
-
-          final currentDate = dateInfo['date'] as DateTime;
-          final normalizedDate = DateTime(
-            currentDate.year,
-            currentDate.month,
-            currentDate.day,
-          );
-
-          // Check if this is today
-          final now = DateTime.now();
-          final today = DateTime(now.year, now.month, now.day);
-          final isToday = normalizedDate.isAtSameMomentAs(today);
-
-          // Get activity level from the new accurate data source
-          final activityLevel = _activityData[normalizedDate] ?? 0;
-
-          return GestureDetector(
-            onTap: () => _showDateDebugInfo(normalizedDate, activityLevel),
-            child: Container(
-              decoration: BoxDecoration(
-                color: _getActivityColor(activityLevel),
-                borderRadius: BorderRadius.circular(3),
-                border:
-                    isToday ? Border.all(color: primaryColor, width: 1) : null,
-              ),
+        physics: const BouncingScrollPhysics(), // Better scroll feel
+        child: SizedBox(
+          width: totalGridWidth,
+          height: 7 * (cellSize + cellSpacing) - cellSpacing,
+          child: GridView.builder(
+            physics:
+                const NeverScrollableScrollPhysics(), // Disable grid's own scrolling
+            scrollDirection: Axis.horizontal,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7, // Days of week
+              childAspectRatio: 1,
+              crossAxisSpacing: cellSpacing,
+              mainAxisSpacing: cellSpacing,
             ),
-          );
-        },
+            itemCount: totalWeeks * 7,
+            itemBuilder: (context, index) {
+              final week = index ~/ 7;
+              final dayOfWeek = index % 7;
+
+              // Calculate which month and day this cell represents
+              final dateInfo = _getDateForGridPosition(
+                week,
+                dayOfWeek,
+                startMonth,
+                endMonth,
+                year,
+              );
+
+              if (dateInfo == null) {
+                // Empty cell (before month start or after month end)
+                return Container();
+              }
+
+              final currentDate = dateInfo['date'] as DateTime;
+              final normalizedDate = DateTime(
+                currentDate.year,
+                currentDate.month,
+                currentDate.day,
+              );
+
+              // Check if this is today
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final isToday = normalizedDate.isAtSameMomentAs(today);
+
+              // Get activity level from the accurate data source
+              final activityLevel = _activityData[normalizedDate] ?? 0;
+
+              return GestureDetector(
+                onTap: () => _showDateDebugInfo(normalizedDate, activityLevel),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _getActivityColor(activityLevel),
+                    borderRadius: BorderRadius.circular(3),
+                    border:
+                        isToday
+                            ? Border.all(color: primaryColor, width: 2)
+                            : null,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 
-  // Debug method to show date information
+  // Enhanced debug method to show date information
   void _showDateDebugInfo(DateTime date, int activityLevel) async {
     try {
       final completedCount = await DbService.getCompletedDhikrCountForDate(
@@ -543,8 +697,14 @@ class _ActivitySectionState extends State<ActivitySection> {
           SnackBar(
             content: Text(
               '$dateStr: $completedCount completed dhikr (level $activityLevel)',
+              style: const TextStyle(color: Colors.white),
             ),
-            duration: const Duration(seconds: 2),
+            backgroundColor: primaryColor,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
@@ -630,14 +790,14 @@ class _ActivitySectionState extends State<ActivitySection> {
       case 0:
         return const Color(0xFFEBEDF0);
       case 1:
-        return const Color(0xFF0F4C75).withOpacity(0.3);
+        return primaryColor.withOpacity(0.3);
       case 2:
-        return const Color(0xFF0F4C75).withOpacity(0.5);
+        return primaryColor.withOpacity(0.5);
       case 3:
-        return const Color(0xFF0F4C75).withOpacity(0.7);
+        return primaryColor.withOpacity(0.7);
       case 4:
       default:
-        return const Color(0xFF0F4C75);
+        return primaryColor;
     }
   }
 }
