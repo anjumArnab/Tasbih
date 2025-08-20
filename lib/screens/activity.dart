@@ -36,15 +36,21 @@ class _ActivitySectionState extends State<ActivitySection> {
   DateTime? _lastDataLoad;
   static const _cacheValidityDuration = Duration(minutes: 1);
 
-  // Scroll controller for horizontal scrolling
-  ScrollController? _scrollController;
+  // Separate scroll controllers for grid and month labels
+  ScrollController? _gridScrollController;
+  ScrollController? _monthLabelScrollController;
 
   static const Color primaryColor = Color(0xFF0F4C75);
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
+    _gridScrollController = ScrollController();
+    _monthLabelScrollController = ScrollController();
+
+    // Sync the scroll controllers
+    _setupScrollSync();
+
     _initializeData();
     _setupRealTimeListeners();
     _setupPeriodicSync();
@@ -55,8 +61,20 @@ class _ActivitySectionState extends State<ActivitySection> {
     _dhikrSubscription?.cancel();
     _activitySubscription?.cancel();
     _syncTimer?.cancel();
-    _scrollController?.dispose();
+    _gridScrollController?.dispose();
+    _monthLabelScrollController?.dispose();
     super.dispose();
+  }
+
+  void _setupScrollSync() {
+    // Sync month labels with grid scrolling
+    _gridScrollController?.addListener(() {
+      if (_monthLabelScrollController != null &&
+          _monthLabelScrollController!.hasClients &&
+          _gridScrollController!.hasClients) {
+        _monthLabelScrollController!.jumpTo(_gridScrollController!.offset);
+      }
+    });
   }
 
   Future<void> _initializeData() async {
@@ -243,7 +261,8 @@ class _ActivitySectionState extends State<ActivitySection> {
 
   // Auto-scroll to current month
   void _scrollToCurrentMonth() {
-    if (_scrollController == null || !_scrollController!.hasClients) return;
+    if (_gridScrollController == null || !_gridScrollController!.hasClients)
+      return;
 
     try {
       final now = DateTime.now();
@@ -269,7 +288,7 @@ class _ActivitySectionState extends State<ActivitySection> {
       }
 
       // Animate to the calculated position
-      _scrollController!.animateTo(
+      _gridScrollController!.animateTo(
         scrollPosition,
         duration: const Duration(milliseconds: 800),
         curve: Curves.easeInOut,
@@ -419,20 +438,6 @@ class _ActivitySectionState extends State<ActivitySection> {
             SizedBox(height: 140, child: _buildCurrentSixMonthGrid()),
             const SizedBox(height: 15),
             _buildActivityLegend(),
-            const SizedBox(height: 10),
-
-            // Add scroll hint
-            Center(
-              child: Text(
-                'Swipe left/right to see more months',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -492,13 +497,13 @@ class _ActivitySectionState extends State<ActivitySection> {
 
     return Column(
       children: [
-        // Month labels - also make them scrollable
+        // Month labels - using separate scroll controller
         Row(
           children: [
             const SizedBox(width: 35), // Space for day labels
             Expanded(
               child: SingleChildScrollView(
-                controller: _scrollController, // Sync with grid scrolling
+                controller: _monthLabelScrollController, // Separate controller
                 scrollDirection: Axis.horizontal,
                 physics:
                     const NeverScrollableScrollPhysics(), // Controlled by grid
@@ -565,7 +570,7 @@ class _ActivitySectionState extends State<ActivitySection> {
               ),
               const SizedBox(width: 10),
 
-              // Activity grid - now with horizontal scrolling
+              // Activity grid - now with horizontal scrolling using dedicated controller
               Expanded(
                 child: _buildCalendarAlignedGrid(
                   startMonth,
@@ -610,11 +615,12 @@ class _ActivitySectionState extends State<ActivitySection> {
     final totalGridWidth = totalWeeks * (cellSize + cellSpacing) - cellSpacing;
 
     return Scrollbar(
-      controller: _scrollController,
+      controller: _gridScrollController, // Use dedicated grid scroll controller
       scrollbarOrientation: ScrollbarOrientation.bottom,
       thumbVisibility: true,
       child: SingleChildScrollView(
-        controller: _scrollController,
+        controller:
+            _gridScrollController, // Use dedicated grid scroll controller
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(), // Better scroll feel
         child: SizedBox(
