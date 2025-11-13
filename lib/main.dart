@@ -5,6 +5,7 @@ import 'models/dhikr.dart';
 import '../models/achievement.dart';
 import '../services/db_service.dart';
 import '../services/achievement_service.dart';
+import '../services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,15 @@ void main() async {
 
   // Initialize services
   try {
+    //Initialize notification service first
+    final notificationService = NotificationService();
+    await notificationService.init();
+    debugPrint('Notification service initialized successfully');
+
+    // Request notification permissions
+    final permissionsGranted = await notificationService.requestPermissions();
+    debugPrint('Notification permissions granted: $permissionsGranted');
+
     // Initialize database service
     await DbService.init();
     debugPrint('Database service initialized successfully');
@@ -36,12 +46,38 @@ void main() async {
     final achievementService = AchievementService();
     await achievementService.init();
     debugPrint('Achievement service initialized successfully');
+
+    //Schedule notifications for existing dhikrs
+    await _scheduleExistingDhikrNotifications();
   } catch (e) {
     debugPrint('Error initializing services: $e');
     // You might want to show an error dialog or handle this more gracefully
   }
 
   runApp(const Tasbih());
+}
+
+// Helper function to schedule notifications for existing dhikrs
+Future<void> _scheduleExistingDhikrNotifications() async {
+  try {
+    final notificationService = NotificationService();
+    final allDhikrs = DbService.getAllDhikr();
+
+    int scheduledCount = 0;
+    for (final dhikr in allDhikrs) {
+      if (dhikr.when != null && dhikr.id != null) {
+        // Only schedule if the time is in the future
+        if (dhikr.when!.isAfter(DateTime.now())) {
+          await notificationService.scheduleDhikrNotification(dhikr);
+          scheduledCount++;
+        }
+      }
+    }
+
+    debugPrint('Scheduled $scheduledCount notifications for existing dhikrs');
+  } catch (e) {
+    debugPrint('Error scheduling existing dhikr notifications: $e');
+  }
 }
 
 class Tasbih extends StatelessWidget {
