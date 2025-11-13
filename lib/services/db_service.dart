@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 import '../models/dhikr.dart';
 import '../data/init_dhikr_data.dart';
 import '../services/achievement_service.dart';
+import '../services/notification_service.dart';
 
 class DbService {
   static const String _boxName = 'dhikr_box';
@@ -14,11 +15,20 @@ class DbService {
   static bool _isInitialized = false;
 
   static AchievementService? _achievementService;
+  static NotificationService? _notificationService;
 
   static Future<void> initAchievementService() async {
     if (_achievementService == null) {
       _achievementService = AchievementService();
       await _achievementService!.init();
+    }
+  }
+
+  // Initialize NotificationService
+  static Future<void> initNotificationService() async {
+    if (_notificationService == null) {
+      _notificationService = NotificationService();
+      await _notificationService!.init();
     }
   }
 
@@ -41,6 +51,7 @@ class DbService {
       }
 
       await initAchievementService();
+      await initNotificationService();
       await _addInitialDataIfNeeded();
       await _checkAndResetDailyCounters();
 
@@ -179,11 +190,30 @@ class DbService {
         await _resetAllDhikrCounters();
         await preferences.put(_lastResetDateKey, todayString);
         await _initializeTodayActivitySnapshot();
+
+        // Reschedule all notifications after daily reset
+        await _rescheduleAllNotifications();
       } else {
         await _updateTodayActivitySnapshot();
       }
     } catch (e) {
       // Silent error handling to prevent app initialization failure
+    }
+  }
+
+  // Reschedule all notifications
+  static Future<void> _rescheduleAllNotifications() async {
+    try {
+      if (_notificationService != null) {
+        final allDhikr = _dhikrBox.values.toList();
+        for (final dhikr in allDhikr) {
+          if (dhikr.when != null && dhikr.id != null) {
+            await _notificationService!.rescheduleDhikrNotification(dhikr);
+          }
+        }
+      }
+    } catch (e) {
+      // Silent error handling
     }
   }
 
@@ -502,6 +532,10 @@ class DbService {
 
         for (final dhikr in initialDhikrList) {
           await _dhikrBox.add(dhikr);
+          // Schedule notification for initial dhikr
+          if (dhikr.when != null && _notificationService != null) {
+            await _notificationService!.scheduleDhikrNotification(dhikr);
+          }
         }
 
         await preferences.put(_isInitializedKey, true);
@@ -555,6 +589,12 @@ class DbService {
       );
 
       await _dhikrBox.add(dhikrWithId);
+
+      // Schedule notification
+      if (dhikrWithId.when != null && _notificationService != null) {
+        await _notificationService!.scheduleDhikrNotification(dhikrWithId);
+      }
+
       return newId;
     } catch (e) {
       throw Exception('Failed to add dhikr: $e');
@@ -775,6 +815,7 @@ class DbService {
     }
   }
 
+  // Added notification rescheduling
   static Future<void> updateDhikr(Dhikr updatedDhikr) async {
     try {
       if (!isInitialized) await init();
@@ -786,6 +827,11 @@ class DbService {
       if (index != -1) {
         await _dhikrBox.putAt(index, updatedDhikr);
         await _updateTodayActivitySnapshot();
+
+        // Reschedule notification
+        if (updatedDhikr.id != null && _notificationService != null) {
+          await _notificationService!.rescheduleDhikrNotification(updatedDhikr);
+        }
       } else {
         throw Exception('Dhikr not found for update');
       }
@@ -859,6 +905,7 @@ class DbService {
     }
   }
 
+  // Added notification canceling
   static Future<void> deleteDhikr(int dhikrId) async {
     try {
       if (!isInitialized) await init();
@@ -870,6 +917,11 @@ class DbService {
       if (index != -1) {
         await _dhikrBox.deleteAt(index);
         await _updateTodayActivitySnapshot();
+
+        // Cancel notification when dhikr is deleted
+        if (_notificationService != null) {
+          await _notificationService!.cancelDhikrNotification(dhikrId);
+        }
       } else {
         throw Exception('Dhikr not found for deletion');
       }
@@ -881,6 +933,12 @@ class DbService {
   static Future<void> clearAllDhikr() async {
     try {
       if (!isInitialized) await init();
+
+      // Cancel all notifications before clearing
+      if (_notificationService != null) {
+        await _notificationService!.cancelAllNotifications();
+      }
+
       await _dhikrBox.clear();
       await _initializeTodayActivitySnapshot();
     } catch (e) {
