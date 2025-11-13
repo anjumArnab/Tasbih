@@ -11,7 +11,7 @@ class InitialDhikrData {
         dhikrTitle: 'Subhan Allah',
         dhikr: 'سُبْحَانَ اللهِ - Glory be to Allah',
         times: 33,
-        when: now.subtract(const Duration(hours: 2)),
+        when: now.add(const Duration(hours: 2)),
         currentCount: 0,
       ),
       Dhikr(
@@ -19,7 +19,7 @@ class InitialDhikrData {
         dhikrTitle: 'Alhamdulillah',
         dhikr: 'الْحَمْدُ لِلَّهِ - All praise is due to Allah',
         times: 33,
-        when: now.subtract(const Duration(hours: 1)),
+        when: now.add(const Duration(hours: 1)),
         currentCount: 0,
       ),
       Dhikr(
@@ -27,7 +27,7 @@ class InitialDhikrData {
         dhikrTitle: 'Allahu Akbar',
         dhikr: 'اللهُ أَكْبَرُ - Allah is the Greatest',
         times: 34,
-        when: now.subtract(const Duration(minutes: 30)),
+        when: now.add(const Duration(minutes: 30)),
         currentCount: 0,
       ),
       Dhikr(
