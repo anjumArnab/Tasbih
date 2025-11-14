@@ -16,12 +16,15 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   intl: ^0.20.2
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.1
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   hive_generator: ^2.0.1
-  build_runner: ^2.4.15
+  build_runner: ^2.4.13
   flutter_lints: ^5.0.0
 
 flutter:
