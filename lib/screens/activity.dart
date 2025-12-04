@@ -4,7 +4,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:hive/hive.dart';
+import 'package:tasbih/widgets/app_snack_bar.dart';
 import '../services/db_service.dart';
+import '../widgets/rounded_button.dart';
 
 class ActivitySection extends StatefulWidget {
   const ActivitySection({super.key});
@@ -365,14 +367,7 @@ class _ActivitySectionState extends State<ActivitySection> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _initializeData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
+            RoundedButton(onTap: _initializeData, text: 'Retry'),
           ],
         ),
       ),
@@ -468,13 +463,10 @@ class _ActivitySectionState extends State<ActivitySection> {
     );
   }
 
-  // New method to determine which 6-month grid to show
+  // Determine which 6-month grid to show
   Widget _buildCurrentSixMonthGrid() {
     final now = DateTime.now();
     final currentMonth = now.month;
-
-    // If current month is January to June (1-6), show first half
-    // If current month is July to December (7-12), show second half
     final isFirstHalf = currentMonth >= 1 && currentMonth <= 6;
 
     return _buildSixMonthGrid(isFirstHalf: isFirstHalf);
@@ -497,16 +489,14 @@ class _ActivitySectionState extends State<ActivitySection> {
 
     return Column(
       children: [
-        // Month labels - using separate scroll controller
         Row(
           children: [
-            const SizedBox(width: 35), // Space for day labels
+            const SizedBox(width: 35),
             Expanded(
               child: SingleChildScrollView(
-                controller: _monthLabelScrollController, // Separate controller
+                controller: _monthLabelScrollController,
                 scrollDirection: Axis.horizontal,
-                physics:
-                    const NeverScrollableScrollPhysics(), // Controlled by grid
+                physics: const NeverScrollableScrollPhysics(),
                 child: Row(
                   children:
                       monthLabels.map((month) {
@@ -570,7 +560,7 @@ class _ActivitySectionState extends State<ActivitySection> {
               ),
               const SizedBox(width: 10),
 
-              // Activity grid - now with horizontal scrolling using dedicated controller
+              // Activity grid
               Expanded(
                 child: _buildCalendarAlignedGrid(
                   startMonth,
@@ -615,20 +605,18 @@ class _ActivitySectionState extends State<ActivitySection> {
     final totalGridWidth = totalWeeks * (cellSize + cellSpacing) - cellSpacing;
 
     return Scrollbar(
-      controller: _gridScrollController, // Use dedicated grid scroll controller
+      controller: _gridScrollController,
       scrollbarOrientation: ScrollbarOrientation.bottom,
       thumbVisibility: true,
       child: SingleChildScrollView(
-        controller:
-            _gridScrollController, // Use dedicated grid scroll controller
+        controller: _gridScrollController,
         scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(), // Better scroll feel
+        physics: const BouncingScrollPhysics(),
         child: SizedBox(
           width: totalGridWidth,
           height: 7 * (cellSize + cellSpacing) - cellSpacing,
           child: GridView.builder(
-            physics:
-                const NeverScrollableScrollPhysics(), // Disable grid's own scrolling
+            physics: const NeverScrollableScrollPhysics(),
             scrollDirection: Axis.horizontal,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7, // Days of week
@@ -662,16 +650,14 @@ class _ActivitySectionState extends State<ActivitySection> {
                 currentDate.day,
               );
 
-              // Check if this is today
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
               final isToday = normalizedDate.isAtSameMomentAs(today);
 
-              // Get activity level from the accurate data source
               final activityLevel = _activityData[normalizedDate] ?? 0;
 
               return GestureDetector(
-                onTap: () => _showDateDebugInfo(normalizedDate, activityLevel),
+                onTap: () => _showDateInfo(normalizedDate, activityLevel),
                 child: Container(
                   decoration: BoxDecoration(
                     color: _getActivityColor(activityLevel),
@@ -690,8 +676,7 @@ class _ActivitySectionState extends State<ActivitySection> {
     );
   }
 
-  // Enhanced debug method to show date information
-  void _showDateDebugInfo(DateTime date, int activityLevel) async {
+  void _showDateInfo(DateTime date, int activityLevel) async {
     try {
       final completedCount = await DbService.getCompletedDhikrCountForDate(
         date,
@@ -699,19 +684,9 @@ class _ActivitySectionState extends State<ActivitySection> {
       final dateStr = DateFormat('MMM dd, yyyy').format(date);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '$dateStr: $completedCount completed dhikr (level $activityLevel)',
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: primaryColor,
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
+        AppSnackbar.showActivityStatus(
+          context,
+          '$dateStr: $completedCount completed dhikr (level $activityLevel)',
         );
       }
     } catch (e) {
