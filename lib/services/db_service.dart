@@ -261,7 +261,7 @@ class DbService {
             await _checkDailyCompletionAndUpdateStreak(updatedDhikr);
 
             if (_achievementService != null) {
-              await _achievementService!.updateDhikrCount(updatedDhikr, 1);
+              await _achievementService!.updateDhikrCount(updatedDhikr);
             }
           }
         } else {
