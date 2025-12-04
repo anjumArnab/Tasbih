@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../widgets/rounded_button.dart';
 import '../models/achievement.dart';
 import '../services/achievement_service.dart';
 import '../services/db_service.dart';
@@ -53,8 +54,8 @@ class _AchievementsSectionState extends State<AchievementsSection> {
 
   Future<void> _loadAchievementData() async {
     try {
-      // Recalculate achievements to ensure they're up to date
-      await _achievementService.recalculateAchievements();
+      // Calculate achievements to ensure they're up to date
+      await _achievementService.calculateAchievements();
 
       setState(() {
         _achievements = _achievementService.getAllAchievements();
@@ -111,12 +112,9 @@ class _AchievementsSectionState extends State<AchievementsSection> {
               style: TextStyle(color: Colors.red[700], fontSize: 15),
             ),
             const SizedBox(height: 15),
-            TextButton(
-              onPressed: _initializeData,
-              child: Text(
-                'Retry',
-                style: TextStyle(color: Colors.red[700], fontSize: 15),
-              ),
+            RoundedButton(
+              onTap: _initializeData,
+              text:'Retry',
             ),
           ],
         ),
