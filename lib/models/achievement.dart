@@ -96,8 +96,4 @@ enum AchievementType {
   count,
   @HiveField(1)
   streak,
-  @HiveField(2)
-  time,
-  @HiveField(3)
-  special,
 }

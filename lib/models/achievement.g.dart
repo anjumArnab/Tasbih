@@ -120,10 +120,6 @@ class AchievementTypeAdapter extends TypeAdapter<AchievementType> {
         return AchievementType.count;
       case 1:
         return AchievementType.streak;
-      case 2:
-        return AchievementType.time;
-      case 3:
-        return AchievementType.special;
       default:
         return AchievementType.count;
     }
@@ -137,12 +133,6 @@ class AchievementTypeAdapter extends TypeAdapter<AchievementType> {
         break;
       case AchievementType.streak:
         writer.writeByte(1);
-        break;
-      case AchievementType.time:
-        writer.writeByte(2);
-        break;
-      case AchievementType.special:
-        writer.writeByte(3);
         break;
     }
   }
