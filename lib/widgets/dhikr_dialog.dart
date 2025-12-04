@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tasbih/widgets/app_snack_bar.dart';
 import '../widgets/rounded_button.dart';
 import '../services/db_service.dart';
 import '../models/dhikr.dart';
@@ -96,7 +97,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
             times: int.parse(_timesToReciteController.text),
             when: _selectedDateTime!,
             currentCount:
-                widget.dhikrToEdit!.currentCount, // Preserve current count
+                widget.dhikrToEdit!.currentCount,
           );
 
           await DbService.updateDhikr(updatedDhikr);
@@ -105,12 +106,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
             Navigator.of(context).pop();
             widget.onDhikrAdded?.call();
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Dhikr updated successfully!'),
-                backgroundColor: Colors.green,
-              ),
-            );
+            AppSnackbar.showSuccess(context, 'Dhikr updated successfully!');
           }
         } else {
           // Add new dhikr
@@ -128,24 +124,12 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
             Navigator.of(context).pop();
             widget.onDhikrAdded?.call();
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Dhikr added successfully!'),
-                backgroundColor: Colors.green,
-              ),
-            );
+            AppSnackbar.showSuccess(context, 'Dhikr added successfully!');
           }
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to ${_isEditMode ? 'update' : 'add'} dhikr: $e',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
+          AppSnackbar.showError(context, 'Failed to ${_isEditMode ? 'update' : 'add'} dhikr: $e');
         }
       } finally {
         if (mounted) {
@@ -155,12 +139,7 @@ class _AddDhikrDialogState extends State<AddDhikrDialog> {
         }
       }
     } else if (_selectedDateTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select date and time'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      AppSnackbar.showError(context, 'Please select date and time');
     }
   }
 
