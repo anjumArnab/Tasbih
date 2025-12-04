@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../screens/nav_wrapper.dart';
-import 'models/dhikr.dart';
-import '../models/achievement.dart';
 import '../services/db_service.dart';
 import '../services/achievement_service.dart';
 import '../services/notification_service.dart';
@@ -13,45 +11,26 @@ void main() async {
   // Initialize Hive
   await Hive.initFlutter();
 
-  // Register adapters
-  if (!Hive.isAdapterRegistered(0)) {
-    Hive.registerAdapter(DhikrAdapter());
-  }
-  if (!Hive.isAdapterRegistered(1)) {
-    Hive.registerAdapter(AchievementAdapter());
-  }
-  if (!Hive.isAdapterRegistered(2)) {
-    Hive.registerAdapter(AchievementCategoryAdapter());
-  }
-  if (!Hive.isAdapterRegistered(3)) {
-    Hive.registerAdapter(AchievementTypeAdapter());
-  }
-
   // Initialize services
   try {
     //Initialize notification service first
     final notificationService = NotificationService();
     await notificationService.init();
-    debugPrint('Notification service initialized successfully');
 
     // Request notification permissions
-    final permissionsGranted = await notificationService.requestPermissions();
-    debugPrint('Notification permissions granted: $permissionsGranted');
+    await notificationService.requestPermissions();
 
     // Initialize database service
     await DbService.init();
-    debugPrint('Database service initialized successfully');
 
     // Initialize achievement service
     final achievementService = AchievementService();
     await achievementService.init();
-    debugPrint('Achievement service initialized successfully');
 
     //Schedule notifications for existing dhikrs
     await _scheduleExistingDhikrNotifications();
   } catch (e) {
-    debugPrint('Error initializing services: $e');
-    // You might want to show an error dialog or handle this more gracefully
+    // Silent error handling
   }
 
   runApp(const Tasbih());
@@ -76,7 +55,7 @@ Future<void> _scheduleExistingDhikrNotifications() async {
 
     debugPrint('Scheduled $scheduledCount notifications for existing dhikrs');
   } catch (e) {
-    debugPrint('Error scheduling existing dhikr notifications: $e');
+    // Silent error handling
   }
 }
 
