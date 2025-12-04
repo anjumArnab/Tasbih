@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:tasbih/widgets/app_snack_bar.dart';
 import '../models/dhikr.dart';
 import '../widgets/dhikr_dialog.dart';
 import '../services/db_service.dart';
@@ -199,28 +200,17 @@ class DhikrTile extends StatelessWidget {
         onDelete?.call();
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Dhikr deleted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          AppSnackbar.showSuccess(context, 'Dhikr deleted successfully');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete dhikr: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackbar.showError(context, 'Failed to delete dhikr: $e');
       }
     }
   }
 
   String _formatDateTime(DateTime dateTime) {
-    // Example output: Jun 25, 2025 – 09:15 PM
     return DateFormat('MMM dd, yyyy - hh:mm a').format(dateTime);
   }
 }
