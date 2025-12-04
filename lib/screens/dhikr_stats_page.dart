@@ -25,13 +25,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
   static const Color secondaryColor = Color(0xFF3282B8);
   static const Color backgroundColor = Color(0xFFF8FBFF);
 
-  void _applyFilters() {
-    // This method can be used for any additional filtering logic if needed
-    setState(() {
-      // Filter logic here if needed
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,7 +83,6 @@ class _DhikrStatsPageState extends State<DhikrStatsPage> {
       onTap: () {
         setState(() {
           selectedFilter = value;
-          _applyFilters();
         });
       },
       child: Container(
