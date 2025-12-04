@@ -22,9 +22,6 @@ class _DhikrpageState extends State<Dhikrpage> {
   bool _isLoading = true;
   String selectedFilter = 'all';
 
-  // Add StreamSubscription to properly manage the listener
-  StreamSubscription? _dhikrSubscription;
-
   static const Color primaryColor = Color(0xFF0F4C75);
   static const Color secondaryColor = Color(0xFF3282B8);
   static const Color accentColor = Color(0xFF00A8CC);
@@ -40,13 +37,6 @@ class _DhikrpageState extends State<Dhikrpage> {
     try {
       await DbService.init();
       await _loadDhikrList();
-
-      // Store the subscription so we can cancel it in dispose()
-      _dhikrSubscription = DbService.watchDhikr().listen((event) {
-        if (mounted) {
-          _loadDhikrList();
-        }
-      });
     } catch (e) {
       if (mounted) {
         AppSnackbar.showError(context, 'Failed to initialize database: $e');
@@ -302,17 +292,11 @@ class _DhikrpageState extends State<Dhikrpage> {
           return DhikrTile(
             dhikr: dhikr,
             onTap: () => _handleDhikrTap(dhikr),
-            onUpdate: _loadDhikrList, // Refresh the list after update
-            onDelete: _loadDhikrList, // Refresh the list after delete
+            onUpdate: _loadDhikrList,
+            onDelete: _loadDhikrList,
           );
         },
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _dhikrSubscription?.cancel();
-    super.dispose();
   }
 }
